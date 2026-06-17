@@ -42,18 +42,18 @@
         <h2 class="text-xl font-extrabold text-red-600 mb-4">👑 방장 전용 관리 메뉴</h2>
         
         <div class="bg-white p-4 rounded border mb-4">
-            <h3 class="font-bold text-gray-700 mb-2">새로운 경기 등록</h3>
+            <h3 class="font-bold text-gray-700 mb-2">1. 새로운 경기 등록</h3>
             <div class="flex flex-wrap gap-2 items-center mb-2">
                 <input type="text" id="new-teamA" class="w-24 border rounded p-2" placeholder="국가A">
                 <span class="font-bold">VS</span>
                 <input type="text" id="new-teamB" class="w-24 border rounded p-2" placeholder="국가B">
                 <input type="number" id="new-handi" class="w-20 border rounded p-2" placeholder="핸디(2.5)" step="0.5" value="2.5">
             </div>
-            <button onclick="createMatch()" class="bg-red-500 text-white px-4 py-2 rounded font-bold hover:bg-red-600">경기 열기</button>
+            <button onclick="createMatch()" class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700">경기 열기</button>
         </div>
 
-        <div class="bg-white p-4 rounded border">
-            <h3 class="font-bold text-gray-700 mb-2">경기 결과 입력 (정산)</h3>
+        <div class="bg-white p-4 rounded border mb-6">
+            <h3 class="font-bold text-gray-700 mb-2">2. 경기 결과 입력 (정산)</h3>
             <div class="flex flex-wrap gap-2 items-center mb-2">
                 <input type="number" id="finish-match-id" class="w-24 border rounded p-2" placeholder="경기번호(ID)">
                 <input type="number" id="finish-scoreA" class="w-16 border rounded p-2" placeholder="A점수">
@@ -62,13 +62,17 @@
             </div>
             <button onclick="finishMatch()" class="bg-gray-800 text-white px-4 py-2 rounded font-bold hover:bg-black">스코어 확정 및 마감</button>
         </div>
+
+        <div class="bg-red-100 p-4 rounded border border-red-300">
+            <h3 class="font-bold text-red-700 mb-2">⚠️ 위험 구역 (전체 초기화)</h3>
+            <p class="text-xs text-red-600 mb-3">모든 경기와 네 사람의 베팅 기록을 완전히 삭제하고 처음부터 다시 시작합니다.</p>
+            <button onclick="resetAllMatches()" class="w-full bg-red-600 text-white px-4 py-3 rounded font-bold hover:bg-red-700 transition">모든 기록 삭제 및 초기화</button>
+        </div>
     </div>
 
     <script>
         const SUPABASE_URL = 'https://tdgcuozhvuyggktdjrry.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkZ2N1b3podnV5Z2drdGRqcnJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MzA2NTgsImV4cCI6MjA5NzIwNjY1OH0.TV08rACNlnetiWJFGYZOpFc89NSpe_52dS-Zwpuy8tU';
-        
-        // ✅ 에러 해결: 변수 이름 충돌을 피하기 위해 'client'로 바꿨어!
         const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         const players = ['박형철', '와대', '손호민', '최석훈'];
@@ -86,15 +90,10 @@
         }
 
         async function loadData() {
-            // ✅ 데이터베이스 요청에 client.from 을 사용하도록 모두 수정함
             const { data: matches, error: mError } = await client.from('matches').select('*').order('created_at', { ascending: true });
             const { data: bets, error: bError } = await client.from('bets').select('*');
             
-            if(mError || bError) {
-                console.error("데이터 로딩 에러:", mError || bError);
-                document.getElementById('matches-list').innerHTML = '<p class="text-center text-red-500">데이터를 불러오는 중 오류가 발생했습니다.</p>';
-                return;
-            }
+            if(mError || bError) return;
 
             renderMatches(matches || [], bets || []);
             calculateLeaderboard(matches || [], bets || []);
@@ -125,110 +124,11 @@
                         <span class="text-xl font-black text-gray-800">${match.team_a}</span>
                         <span class="text-gray-400 font-bold mx-2">VS</span>
                         <span class="text-xl font-black text-gray-800">${match.team_b}</span>
-                        <p class="text-sm text-blue-600 font-bold mt-1">핸디캡: 팀A ${match.handicap > 0 ? '+'+match.handicap : match.handicap}</p>
+                        <p class="text-sm text-blue-600 font-bold mt-1">핸디캡: 팀A ${Number(match.handicap) > 0 ? '+'+Number(match.handicap) : Number(match.handicap)}</p>
                     </div>
                 `;
 
                 if (match.status === 'open') {
                     cardHTML += `
                     <div class="flex gap-2 mb-3">
-                        <button onclick="placeBet(${match.id}, 'A')" class="${myBet?.pick === 'A' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'} w-1/2 py-2 rounded font-bold hover:bg-blue-500 hover:text-white transition">${match.team_a} 승</button>
-                        <button onclick="placeBet(${match.id}, 'B')" class="${myBet?.pick === 'B' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700'} w-1/2 py-2 rounded font-bold hover:bg-red-500 hover:text-white transition">${match.team_b} 승</button>
-                    </div>
-                    <div class="text-xs text-center mt-2 p-2 bg-gray-100 rounded">베팅 현황: ${betStatusText}</div>
-                    `;
-                } else if (match.status === 'finished') {
-                    const adjustedA = match.score_a + match.handicap;
-                    const winnerResult = adjustedA > match.score_b ? 'A' : 'B';
-                    const winnerText = winnerResult === 'A' ? `${match.team_a} 승리` : `${match.team_b} 승리`;
-                    
-                    const losers = matchBets.filter(b => b.pick !== winnerResult).map(b => b.player_name);
-                    
-                    cardHTML += `
-                    <div class="bg-gray-800 text-white p-3 rounded text-sm mt-2 text-center">
-                        <p class="mb-1 text-gray-300">실제 스코어 <span class="font-bold text-white">${match.score_a} : ${match.score_b}</span></p>
-                        <p class="font-bold text-yellow-400 mb-2">핸디캡 적용 결과: [${winnerText}]</p>
-                        <p class="text-red-400">❌ 오답(벌금): ${losers.length > 0 ? losers.join(', ') : '전원 정답!'}</p>
-                    </div>
-                    <div class="text-xs text-center mt-2">나의 픽: ${myBet ? (myBet.pick === 'A' ? match.team_a : match.team_b) : '베팅 안함'}</div>
-                    `;
-                }
-
-                cardHTML += `</div>`;
-                container.insertAdjacentHTML('beforeend', cardHTML);
-            });
-        }
-
-        function calculateLeaderboard(matches, bets) {
-            const finishedMatches = matches.filter(m => m.status === 'finished');
-            if(finishedMatches.length === 0) return;
-
-            let misses = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
-
-            finishedMatches.forEach(match => {
-                const adjustedA = match.score_a + match.handicap;
-                const winnerResult = adjustedA > match.score_b ? 'A' : 'B';
-                
-                const matchBets = bets.filter(b => b.match_id === match.id);
-                matchBets.forEach(bet => {
-                    if(bet.pick !== winnerResult) misses[bet.player_name]++;
-                });
-            });
-
-            const sorted = Object.entries(misses).sort((a, b) => b[1] - a[1]);
-            document.getElementById('leaderboard').innerHTML = sorted.map(([name, count]) => 
-                count > 0 
-                ? `<li class="flex justify-between bg-gray-700 p-2 rounded"><span>👤 ${name}</span><span class="text-red-400 font-bold">${count}회 오답 💸</span></li>`
-                : `<li class="flex justify-between bg-gray-700 p-2 rounded opacity-50"><span>👤 ${name}</span><span class="text-green-400">전부 적중! 🎉</span></li>`
-            ).join('');
-        }
-
-        async function placeBet(matchId, pick) {
-            if (!currentUser) return alert('맨 위에서 먼저 내 이름을 선택해주세요!');
-            
-            await client.from('bets').delete().match({ match_id: matchId, player_name: currentUser });
-            const { error } = await client.from('bets').insert({ match_id: matchId, player_name: currentUser, pick: pick });
-            
-            if (error) alert('오류 발생: ' + error.message);
-            else loadData();
-        }
-
-        async function createMatch() {
-            const teamA = document.getElementById('new-teamA').value;
-            const teamB = document.getElementById('new-teamB').value;
-            const handi = parseFloat(document.getElementById('new-handi').value);
-
-            if(!teamA || !teamB) return alert('국가 이름을 입력하세요!');
-
-            const { error } = await client.from('matches').insert({ team_a: teamA, team_b: teamB, handicap: handi, status: 'open' });
-            if (error) alert('추가 실패: ' + error.message);
-            else {
-                alert('경기가 등록되었습니다!');
-                loadData();
-            }
-        }
-
-        async function finishMatch() {
-            const matchId = parseInt(document.getElementById('finish-match-id').value);
-            const scoreA = parseInt(document.getElementById('finish-scoreA').value);
-            const scoreB = parseInt(document.getElementById('finish-scoreB').value);
-
-            if(isNaN(matchId) || isNaN(scoreA) || isNaN(scoreB)) return alert('모든 값을 정확히 입력하세요!');
-
-            const { error } = await client.from('matches').update({
-                score_a: scoreA,
-                score_b: scoreB,
-                status: 'finished'
-            }).match({ id: matchId });
-
-            if (error) alert('정산 실패: ' + error.message);
-            else {
-                alert('정산이 완료되었습니다!');
-                loadData();
-            }
-        }
-
-        window.onload = init;
-    </script>
-</body>
-</html>
+                        <button onclick="placeBet(${match.id}, 'A')" class="${myBet?.pick === 'A' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'} w-1/2 py-2 rounded font-bold hover:bg-
