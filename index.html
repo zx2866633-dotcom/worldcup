@@ -101,7 +101,6 @@
         let currentUser = localStorage.getItem('worldcupUser') || '';
         let currentIP = 'IP확인불가'; 
 
-        // ✅ 보스니아 하이픈 버전을 사전에 추가했습니다.
         const teamDictionary = {
             "Mexico": "멕시코", "Czech Republic": "체코", "Czechia": "체코", "South Africa": "남아프리카공화국", "South Korea": "대한민국", "Korea Republic": "대한민국",
             "Canada": "캐나다", "Bosnia and Herzegovina": "보스니아 헤르체고비나", "Bosnia": "보스니아 헤르체고비나", "Bosnia-Herzegovina": "보스니아 헤르체고비나", "Qatar": "카타르", "Switzerland": "스위스",
@@ -259,7 +258,7 @@
 
                     if (existingMatch) {
                         if (isFinished && existingMatch.status !== 'finished' && existingMatch.status !== 'paid') {
-                            await client.from('matches').update({ score_a: scoreA, score_b: scoreB, status: 'finished' }).match({ id: existingMatch.id });
+                            await client.from('matches').update({ score_a: scoreA, score_b: scoreB, status: 'finished' }).eq('id', existingMatch.id);
                             updateCount++;
                         }
                     } else {
@@ -277,7 +276,7 @@
         async function updateHandicap(id) {
             const h = parseFloat(document.getElementById(`h-${id}`).value);
             if(isNaN(h)) return alert("정확한 숫자를 입력하세요.");
-            await client.from('matches').update({ handicap: h }).match({ id: id });
+            await client.from('matches').update({ handicap: h }).eq('id', id);
             logAction('핸디캡변경', `경기ID:${id} 핸디캡을 ${h}로 변경`);
             alert("핸디캡이 적용되었습니다.");
             loadData();
@@ -433,7 +432,6 @@
             });
         }
 
-        // ✅ 총 장부금액이 유실되지 않도록 정산완료/수금완료 상태를 명확히 나누어 계산합니다.
         function calculateLeaderboard(matches, bets) {
             const allSettled = matches.filter(m => m.status === 'finished' || m.status === 'paid');
             const onlyPaid = matches.filter(m => m.status === 'paid');
@@ -441,7 +439,6 @@
             let misses = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             let paidMissesCount = 0;
             
-            // 1. 개인 랭킹 점수 계산 (정산완료 + 수금완료 전체 누적)
             allSettled.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const adjA = Number(match.score_a) + Number(match.handicap);
@@ -456,7 +453,6 @@
                 }
             });
 
-            // 2. 화면 상단 '총 모금액' 계산 (오직 실입금 처리된 paid 경기들만 반영)
             onlyPaid.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const adjA = Number(match.score_a) + Number(match.handicap);
@@ -471,7 +467,6 @@
                 }
             });
 
-            // 총 모금액 화면에 업데이트
             document.getElementById('total-fund').innerText = (paidMissesCount * 1500).toLocaleString() + '원';
 
             const sorted = Object.entries(misses).sort((a,b) => b[1]-a[1]);
@@ -494,13 +489,13 @@
         }
 
         async function closeBetting(id) { 
-            await client.from('matches').update({ status: 'closed' }).match({ id: id }); 
+            await client.from('matches').update({ status: 'closed' }).eq('id', id); 
             logAction('마감', `경기ID:${id} 베팅 마감 처리`);
             loadData(); 
         }
         
         async function markAsPaid(id) { 
-            await client.from('matches').update({ status: 'paid' }).match({ id: id }); 
+            await client.from('matches').update({ status: 'paid' }).eq('id', id); 
             logAction('수금완료', `경기ID:${id} 수금 완료 처리`);
             loadData(); 
         }
@@ -509,7 +504,7 @@
             const sA = document.getElementById(`sA-${id}`).value;
             const sB = document.getElementById(`sB-${id}`).value;
             if(!sA || !sB) return alert("점수 입력 필수!");
-            await client.from('matches').update({ score_a: sA, score_b: sB, status: 'finished' }).match({ id: id });
+            await client.from('matches').update({ score_a: sA, score_b: sB, status: 'finished' }).eq('id', id);
             logAction('결과확정', `경기ID:${id} 스코어 ${sA}:${sB} 입력`);
             loadData();
         }
@@ -534,34 +529,57 @@
             if(!checkAuth()) return;
             const nA = prompt("팀A 수정:", a), nB = prompt("팀B 수정:", b), nH = prompt("핸디:", h);
             if(nA && nB) {
-                await client.from('matches').update({ team_a: nA, team_b: nB, handicap: parseFloat(nH) }).match({ id: id });
+                await client.from('matches').update({ team_a: nA, team_b: nB, handicap: parseFloat(nH) }).eq('id', id);
                 logAction('경기수정', `경기ID:${id} 수정됨`);
                 loadData();
             }
         }
 
+        // ✅ 방장의 픽 강제수정 로직 튼튼하게 개선
         async function editBetsAdmin(matchId) {
             if(!checkAuth()) return;
-            const input = prompt("박형철, 와대, 손호민, 최석훈 님의 베팅을 쉼표(,)로 구분해서 입력하세요.\n(A: 팀A, B: 팀B, X: 베팅안함)\n\n예시: A, B, A, X");
+            const input = prompt("박형철, 와대, 손호민, 최석훈 님의 베팅을 순서대로 입력하세요.\n(A: 왼쪽팀 승, B: 오른쪽팀 승, X: 미참여)\n\n입력 예시: ABXA 또는 A,B,X,A");
             if(!input) return;
             
-            const picks = input.split(',').map(s => s.trim().toUpperCase());
-            if(picks.length !== 4) return alert("4명의 픽을 쉼표로 정확히 4개 입력해주세요.");
-
-            await client.from('bets').delete().match({ match_id: matchId });
-            for(let i=0; i<4; i++) {
-                if(picks[i] === 'A' || picks[i] === 'B') await client.from('bets').insert({ match_id: matchId, player_name: players[i], pick: picks[i] });
+            // 공백, 쉼표, 특수문자 다 무시하고 A, B, X, a, b, x 등 알파벳만 뽑아냄
+            const cleanPicks = input.replace(/[^a-zA-Z]/g, '').toUpperCase();
+            if(cleanPicks.length !== 4) {
+                return alert("A, B, X 중 하나씩 총 4명 분의 픽을 정확히 입력해주세요!\n(예시: ABXA)");
             }
-            logAction('강제픽수정', `경기ID:${matchId} 방장이 픽 수정 (${picks.join(',')})`);
-            alert("베팅 기록이 수정되었습니다.");
-            loadData();
+
+            const picks = cleanPicks.split('');
+
+            try {
+                // 1. 해당 경기의 기존 픽 싹 다 삭제
+                await client.from('bets').delete().eq('match_id', matchId);
+                
+                // 2. 새 픽 준비
+                const newBets = [];
+                for(let i=0; i<4; i++) {
+                    if(picks[i] === 'A' || picks[i] === 'B') {
+                        newBets.push({ match_id: matchId, player_name: players[i], pick: picks[i] });
+                    }
+                }
+
+                // 3. 한 방에 밀어넣기
+                if (newBets.length > 0) {
+                    await client.from('bets').insert(newBets);
+                }
+                
+                logAction('강제픽수정', `경기ID:${matchId} 방장 픽 수정 (${picks.join(', ')})`);
+                alert("베팅 기록이 완벽하게 수정되었습니다!");
+                loadData();
+            } catch(e) {
+                console.error(e);
+                alert("수정 중 오류가 발생했습니다. (자세한 내용은 콘솔 확인)");
+            }
         }
         
         async function deleteMatch(id) {
             if(!checkAuth()) return;
             if(!confirm("삭제하시겠습니까?")) return;
-            await client.from('bets').delete().match({ match_id: id });
-            await client.from('matches').delete().match({ id: id });
+            await client.from('bets').delete().eq('match_id', id);
+            await client.from('matches').delete().eq('id', id);
             logAction('삭제', `경기ID:${id} 삭제됨`);
             loadData();
         }
