@@ -45,37 +45,24 @@
     <div id="admin-menu" class="max-w-3xl mx-auto bg-red-50 rounded-xl shadow-lg overflow-hidden p-6 border-2 border-red-200 hidden">
         <h2 class="text-xl font-extrabold text-red-600 mb-4">👑 방장 전용 관리 메뉴</h2>
         
-        <!-- API 동기화 섹션 -->
-        <div class="bg-blue-100 p-4 rounded border border-blue-300 mb-4">
-            <h3 class="font-bold text-blue-800 mb-2">🌐 월드컵 자동 동기화</h3>
-            <button onclick="handleAdminAction('sync')" class="w-full bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 transition text-sm">🔄 ESPN 최신 일정/결과 가져오기</button>
-            <p class="text-[11px] text-gray-600 mt-2 font-medium">※ 누르면 새 경기가 자동 등록되고, 끝난 경기의 점수가 자동 기입됩니다.</p>
-        </div>
-
-        <!-- 핸디캡 설정 섹션 -->
-        <div class="bg-yellow-50 p-4 rounded border border-yellow-300 mb-4">
-            <h3 class="font-bold text-yellow-800 mb-2">⚡ 핸디캡 일괄 설정 (신규 경기)</h3>
-            <div id="admin-handicap-list" class="space-y-2 text-sm"></div>
-        </div>
-
         <div class="bg-white p-4 rounded border mb-4">
-            <h3 class="font-bold text-gray-700 mb-2">1. 수동 경기 등록</h3>
+            <h3 class="font-bold text-gray-700 mb-2">1. 경기 등록</h3>
             <div class="flex flex-wrap gap-2 items-center mb-2">
                 <input type="text" id="new-teamA" class="w-24 border rounded p-2 text-sm" placeholder="국가A">
                 <span class="font-bold">VS</span>
                 <input type="text" id="new-teamB" class="w-24 border rounded p-2 text-sm" placeholder="국가B">
                 <input type="text" id="new-handi" class="w-16 border rounded p-2 text-sm" placeholder="핸디캡" value="2.5">
             </div>
-            <button onclick="handleAdminAction('create')" class="w-full bg-gray-600 text-white p-2 rounded font-bold hover:bg-gray-700 text-sm">수동 열기</button>
+            <button onclick="handleAdminAction('create')" class="w-full bg-blue-600 text-white p-2 rounded font-bold hover:bg-blue-700 text-sm">경기 열기</button>
         </div>
 
-        <div class="bg-white p-4 rounded border mb-6">
-            <h3 class="font-bold text-gray-700 mb-2">2. 수동 경기 결과 입력 / 마감</h3>
+        <div class="bg-white p-4 rounded border mb-4">
+            <h3 class="font-bold text-gray-700 mb-2">2. 진행 중인 경기 결과 입력</h3>
             <div id="admin-result-list" class="space-y-2 text-sm"></div>
         </div>
 
         <div class="bg-red-100 p-4 rounded border border-red-300">
-            <button onclick="logoutAdmin()" class="w-full bg-gray-500 text-white px-4 py-2 rounded font-bold hover:bg-gray-600 transition text-sm mb-2">🔒 관리자 모드 잠금 (닫기)</button>
+            <button onclick="logoutAdmin()" class="w-full bg-gray-500 text-white px-4 py-2 rounded font-bold hover:bg-gray-600 transition text-sm mb-2">🔒 관리자 모드 잠금</button>
             <button onclick="handleAdminAction('reset')" class="w-full bg-red-600 text-white px-4 py-2 rounded font-bold hover:bg-red-700 transition text-sm">모든 데이터 초기화</button>
         </div>
     </div>
@@ -88,135 +75,30 @@
         const players = ['박형철', '와대', '손호민', '최석훈'];
         let currentUser = localStorage.getItem('worldcupUser') || '';
 
-        // 번역 및 이모지 사전
-        const teamDictionary = {
-            "South Korea": "🇰🇷 대한민국", "Korea Republic": "🇰🇷 대한민국",
-            "Japan": "🇯🇵 일본", "United States": "🇺🇸 미국", "USA": "🇺🇸 미국",
-            "Mexico": "🇲🇽 멕시코", "Canada": "🇨🇦 캐나다", "Brazil": "🇧🇷 브라질",
-            "Argentina": "🇦🇷 아르헨티나", "France": "🇫🇷 프랑스", "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿 잉글랜드",
-            "Germany": "🇩🇪 독일", "Spain": "🇪🇸 스페인", "Portugal": "🇵🇹 포르투갈",
-            "Netherlands": "🇳🇱 네덜란드", "Italy": "🇮🇹 이탈리아", "Belgium": "🇧🇪 벨기에",
-            "Uruguay": "🇺🇾 우루과이", "Colombia": "🇨🇴 콜롬비아", "Chile": "🇨🇱 칠레",
-            "Croatia": "🇭🇷 크로아티아", "Morocco": "🇲🇦 모로코", "Senegal": "🇸🇳 세네갈",
-            "Ghana": "🇬🇭 가나", "Cameroon": "🇨🇲 카메룬", "Saudi Arabia": "🇸🇦 사우디",
-            "Iran": "🇮🇷 이란", "Australia": "🇦🇺 호주", "Wales": "🏴󠁧󠁢󠁷󠁬󠁳󠁿 웨일스",
-            "Poland": "🇵🇱 폴란드", "Denmark": "🇩🇰 덴마크", "Tunisia": "🇹🇳 튀니지",
-            "Switzerland": "🇨🇭 스위스", "Serbia": "🇷🇸 세르비아", "Ecuador": "🇪🇨 에콰도르",
-            "Qatar": "🇶🇦 카타르"
-        };
+        function init() {
+            if (currentUser) document.getElementById('current-user').value = currentUser;
+            loadData();
+        }
 
         function checkAuth() {
             if (sessionStorage.getItem('isAdmin') === 'true') return true;
             const input = prompt("방장 비밀번호:");
-            if (input === ADMIN_PASSWORD) {
-                sessionStorage.setItem('isAdmin', 'true');
-                return true;
-            }
-            alert("비밀번호가 틀렸습니다.");
-            return false;
+            if (input === ADMIN_PASSWORD) { sessionStorage.setItem('isAdmin', 'true'); return true; }
+            alert("비밀번호 틀림."); return false;
         }
 
         function handleAdminAction(action, ...args) {
-            if(!checkAuth()) return;
+            if(action !== 'show_menu' && !checkAuth()) return;
             if(action === 'show_menu') document.getElementById('admin-menu').classList.remove('hidden');
             if(action === 'create') createMatch();
             if(action === 'finish') finishMatch(args[0]);
             if(action === 'paid') markAsPaid(args[0]);
             if(action === 'close') closeBetting(args[0]);
-            if(action === 'set_handi') updateHandicap(args[0]);
-            if(action === 'sync') syncWorldCup();
             if(action === 'reset') resetAllMatches();
         }
 
-        function logoutAdmin() {
-            sessionStorage.removeItem('isAdmin');
-            document.getElementById('admin-menu').classList.add('hidden');
-        }
-
-        // 🔄 API 동기화 함수
-        async function syncWorldCup() {
-            try {
-                // ESPN API 사용
-                const response = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard');
-                const data = await response.json();
-                
-                const { data: dbMatches } = await client.from('matches').select('*');
-                let newCount = 0;
-                let updateCount = 0;
-
-                for (const event of data.events) {
-                    const comp = event.competitions[0];
-                    const home = comp.competitors.find(c => c.homeAway === 'home');
-                    const away = comp.competitors.find(c => c.homeAway === 'away');
-                    
-                    // 번역 적용, 사전에 없으면 원래 영어 이름 사용
-                    const teamA = teamDictionary[home.team.name] || home.team.name;
-                    const teamB = teamDictionary[away.team.name] || away.team.name;
-                    const scoreA = parseInt(home.score) || 0;
-                    const scoreB = parseInt(away.score) || 0;
-                    
-                    // 'post' = 경기 종료
-                    const isFinished = event.status.type.state === 'post' || event.status.type.completed;
-
-                    // 이름으로 기존 경기 찾기
-                    const existingMatch = dbMatches.find(m => m.team_a === teamA && m.team_b === teamB);
-
-                    if (existingMatch) {
-                        // 결과 자동 업데이트
-                        if (isFinished && existingMatch.status !== 'finished' && existingMatch.status !== 'paid') {
-                            await client.from('matches').update({ score_a: scoreA, score_b: scoreB, status: 'finished' }).match({ id: existingMatch.id });
-                            updateCount++;
-                        }
-                    } else {
-                        // 새로운 경기 추가 (핸디캡은 0으로)
-                        let initialStatus = isFinished ? 'finished' : 'open';
-                        await client.from('matches').insert({
-                            team_a: teamA, team_b: teamB, handicap: 0, status: initialStatus, score_a: scoreA, score_b: scoreB, created_at: event.date
-                        });
-                        newCount++;
-                    }
-                }
-                alert(`🌐 동기화 성공!\n새로 등록된 경기: ${newCount}건\n자동 정산된 경기: ${updateCount}건\n\n새로 등록된 경기의 핸디캡을 설정해주세요!`);
-                loadData();
-            } catch(e) {
-                alert("동기화 중 오류 발생: API 상태를 확인하세요.");
-                console.error(e);
-            }
-        }
-
-        async function updateHandicap(id) {
-            const h = parseFloat(document.getElementById(`h-${id}`).value);
-            if(isNaN(h)) return alert("정확한 숫자를 입력하세요.");
-            await client.from('matches').update({ handicap: h }).match({ id: id });
-            loadData();
-        }
-
-        function renderAdminResults(matches) {
-            const resultList = document.getElementById('admin-result-list');
-            const handicapList = document.getElementById('admin-handicap-list');
-            
-            // 1. 결과 입력 리스트 (오픈 또는 마감된 경기)
-            const openMatches = matches.filter(m => m.status === 'open' || m.status === 'closed');
-            resultList.innerHTML = openMatches.length ? openMatches.map(m => `
-                <div class="flex items-center gap-1 bg-gray-50 p-2 rounded">
-                    <span class="flex-grow font-bold truncate text-xs">${m.team_a} vs ${m.team_b}</span>
-                    <input type="number" id="scoreA-${m.id}" class="w-10 border p-1 rounded text-center" placeholder="A">
-                    <span>:</span>
-                    <input type="number" id="scoreB-${m.id}" class="w-10 border p-1 rounded text-center" placeholder="B">
-                    <button onclick="handleAdminAction('finish', ${m.id})" class="bg-gray-800 text-white px-2 py-1 rounded">확정</button>
-                    <button onclick="handleAdminAction('close', ${m.id})" class="bg-yellow-600 text-white px-2 py-1 rounded">마감</button>
-                </div>
-            `).join('') : '<p class="text-xs text-center text-gray-500">수동 조작할 경기가 없습니다.</p>';
-
-            // 2. 핸디캡 설정 리스트 (핸디캡이 0이고 아직 확정되지 않은 경기)
-            const needsHandicap = matches.filter(m => (m.status === 'open' || m.status === 'closed') && m.handicap === 0);
-            handicapList.innerHTML = needsHandicap.length ? needsHandicap.map(m => `
-                <div class="flex items-center gap-1 bg-white p-2 rounded border border-yellow-200 shadow-sm">
-                    <span class="flex-grow font-bold truncate text-xs text-yellow-900">${m.team_a} vs ${m.team_b}</span>
-                    <input type="text" id="h-${m.id}" class="w-16 border border-yellow-400 p-1 rounded text-center text-sm" placeholder="핸디" value="0">
-                    <button onclick="handleAdminAction('set_handi', ${m.id})" class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">저장</button>
-                </div>`).join('') : '<p class="text-xs text-center text-gray-500">핸디캡을 설정할 새 경기가 없습니다.</p>';
-        }
+        function logoutAdmin() { sessionStorage.removeItem('isAdmin'); document.getElementById('admin-menu').classList.add('hidden'); }
+        function saveUser() { currentUser = document.getElementById('current-user').value; localStorage.setItem('worldcupUser', currentUser); loadData(); }
 
         async function loadData() {
             try {
@@ -228,60 +110,21 @@
 
                 renderMatches(matches || [], bets || []);
                 calculateLeaderboard(matches || [], bets || []);
-                renderAdminResults(matches || []);
-            } catch (err) { alert(err.message); }
+                renderAdminList(matches || []);
+            } catch (err) { console.error(err); }
         }
 
-        async function markAsPaid(id) {
-            await client.from('matches').update({ status: 'paid' }).match({ id: id });
-            loadData();
-        }
-
-        async function finishMatch(id) {
-            const sA = document.getElementById(`scoreA-${id}`).value;
-            const sB = document.getElementById(`scoreB-${id}`).value;
-            if(!sA || !sB) return alert("점수를 입력하세요.");
-            await client.from('matches').update({ score_a: sA, score_b: sB, status: 'finished' }).match({ id: id });
-            alert("정산 완료!");
-            loadData();
-        }
-
-        async function init() { if (currentUser) document.getElementById('current-user').value = currentUser; await loadData(); }
-        function saveUser() { currentUser = document.getElementById('current-user').value; localStorage.setItem('worldcupUser', currentUser); loadData(); }
-        
-        async function editMatch(id, a, b, h) {
-            if(!checkAuth()) return;
-            const newA = prompt("팀A 수정:", a); if(newA === null) return;
-            const newB = prompt("팀B 수정:", b); if(newB === null) return;
-            const newH = prompt("핸디캡 수정:", h); if(newH === null) return;
-            await client.from('matches').update({ team_a: newA, team_b: newB, handicap: parseFloat(newH) }).match({ id: id });
-            loadData();
-        }
-
-        async function editBetsAdmin(matchId) {
-            if(!checkAuth()) return;
-            const input = prompt("박형철, 와대, 손호민, 최석훈 님의 베팅을 쉼표(,)로 구분해서 입력하세요.\n(A: 팀A, B: 팀B, X: 베팅안함)\n\n예시: A, B, A, X");
-            if(!input) return;
-            
-            const picks = input.split(',').map(s => s.trim().toUpperCase());
-            if(picks.length !== 4) return alert("4명의 픽을 쉼표로 정확히 4개 입력해주세요.");
-
-            await client.from('bets').delete().match({ match_id: matchId });
-            for(let i=0; i<4; i++) {
-                if(picks[i] === 'A' || picks[i] === 'B') {
-                    await client.from('bets').insert({ match_id: matchId, player_name: players[i], pick: picks[i] });
-                }
-            }
-            alert("베팅 기록이 수정되었습니다.");
-            loadData();
-        }
-
-        async function deleteMatch(id) {
-            if(!checkAuth()) return;
-            if(!confirm("이 경기를 완전히 삭제하시겠습니까?")) return;
-            await client.from('bets').delete().match({ match_id: id });
-            await client.from('matches').delete().match({ id: id });
-            loadData();
+        function renderAdminList(matches) {
+            const list = document.getElementById('admin-result-list');
+            const openMatches = matches.filter(m => m.status === 'open' || m.status === 'closed');
+            list.innerHTML = openMatches.length ? openMatches.map(m => `
+                <div class="flex items-center gap-1 bg-gray-50 p-2 rounded">
+                    <span class="flex-grow font-bold truncate text-xs">${m.team_a} vs ${m.team_b}</span>
+                    <input type="number" id="sA-${m.id}" class="w-8 border p-1 rounded text-center" placeholder="A">
+                    <input type="number" id="sB-${m.id}" class="w-8 border p-1 rounded text-center" placeholder="B">
+                    <button onclick="handleAdminAction('finish', ${m.id})" class="bg-gray-800 text-white px-2 py-1 rounded">확정</button>
+                    <button onclick="handleAdminAction('close', ${m.id})" class="bg-yellow-600 text-white px-2 py-1 rounded">마감</button>
+                </div>`).join('') : '<p class="text-xs text-center">정산할 경기 없음</p>';
         }
 
         function renderMatches(matches, bets) {
@@ -416,6 +259,60 @@
 
         async function closeBetting(id) {
             await client.from('matches').update({ status: 'closed' }).match({ id: id });
+            loadData();
+        }
+
+        async function finishMatch(id) {
+            const sA = document.getElementById(`sA-${id}`).value, sB = document.getElementById(`sB-${id}`).value;
+            if(!sA || !sB) return alert("점수 입력 필수!");
+            await client.from('matches').update({ score_a: sA, score_b: sB, status: 'finished' }).match({ id: id });
+            loadData();
+        }
+
+        async function createMatch() {
+            const tA = document.getElementById('new-teamA').value, tB = document.getElementById('new-teamB').value, h = parseFloat(document.getElementById('new-handi').value);
+            if(!tA || !tB || isNaN(h)) return alert("국가명과 핸디캡을 정확히 입력하세요.");
+            await client.from('matches').insert({ team_a: tA, team_b: tB, handicap: h, status: 'open', created_at: new Date() });
+            loadData();
+        }
+
+        async function resetAllMatches() {
+            if(!confirm("⚠️ 모든 기록을 초기화하시겠습니까? 복구할 수 없습니다.")) return;
+            await client.from('bets').delete().neq('id', 0);
+            await client.from('matches').delete().neq('id', 0);
+            loadData();
+        }
+
+        async function editMatch(id, a, b, h) {
+            if(!checkAuth()) return;
+            const nA = prompt("팀A 수정:", a), nB = prompt("팀B 수정:", b), nH = prompt("핸디:", h);
+            if(nA && nB) await client.from('matches').update({ team_a: nA, team_b: nB, handicap: parseFloat(nH) }).match({ id: id });
+            loadData();
+        }
+
+        async function editBetsAdmin(matchId) {
+            if(!checkAuth()) return;
+            const input = prompt("박형철, 와대, 손호민, 최석훈 님의 베팅을 쉼표(,)로 구분해서 입력하세요.\n(A: 팀A, B: 팀B, X: 베팅안함)\n\n예시: A, B, A, X");
+            if(!input) return;
+            
+            const picks = input.split(',').map(s => s.trim().toUpperCase());
+            if(picks.length !== 4) return alert("4명의 픽을 쉼표로 정확히 4개 입력해주세요.");
+
+            await client.from('bets').delete().match({ match_id: matchId });
+            for(let i=0; i<4; i++) {
+                if(picks[i] === 'A' || picks[i] === 'B') {
+                    await client.from('bets').insert({ match_id: matchId, player_name: players[i], pick: picks[i] });
+                }
+            }
+            alert("베팅 기록이 수정되었습니다.");
+            loadData();
+        }
+        
+        async function deleteMatch(id) {
+            if(!checkAuth()) return;
+            if(!confirm("삭제하시겠습니까?")) return;
+            await client.from('bets').delete().match({ match_id: id });
+            await client.from('matches').delete().match({ id: id });
             loadData();
         }
 
