@@ -51,6 +51,7 @@
                 <input type="date" id="sync-date" class="border p-2 rounded text-sm flex-grow">
                 <button onclick="handleAdminAction('sync')" class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 transition text-sm whitespace-nowrap">🔄 가져오기</button>
             </div>
+            <p class="text-[11px] text-gray-600 font-medium">※ 날짜를 선택하고 가져오기를 누르면 새 경기가 등록되고, 종료된 경기는 스코어가 기입됩니다.</p>
         </div>
 
         <div class="bg-white p-4 rounded border mb-4">
@@ -92,7 +93,7 @@
         const ADMIN_PASSWORD = "1234";
         const players = ['박형철', '와대', '손호민', '최석훈'];
         let currentUser = localStorage.getItem('worldcupUser') || '';
-        let currentIP = 'IP확인불가'; // 접속자 IP 저장용 변수
+        let currentIP = 'IP확인불가'; 
 
         const teamDictionary = {
             "Mexico": "멕시코", "Czech Republic": "체코", "Czechia": "체코", "South Africa": "남아프리카공화국", "South Korea": "대한민국", "Korea Republic": "대한민국",
@@ -109,7 +110,6 @@
             "England": "잉글랜드", "Croatia": "크로아티아", "DR Congo": "콩고민주공화국", "Congo DR": "콩고민주공화국", "Democratic Republic of the Congo": "콩고민주공화국", "Panama": "파나마"
         };
 
-        // ⚡ 접속자 IP 가져오기 (무료 API)
         async function fetchIP() {
             try {
                 const response = await fetch('https://api.ipify.org?format=json');
@@ -118,7 +118,6 @@
             } catch(e) { console.error("IP 가져오기 실패"); }
         }
 
-        // ✅ 로그 기록 (IP 포함)
         async function logAction(actionType, details) {
             const user = currentUser || '알수없음';
             try {
@@ -126,13 +125,12 @@
                     user_name: user, 
                     action_type: actionType, 
                     details: details,
-                    ip_address: currentIP // 추가된 IP 기록 부분
+                    ip_address: currentIP 
                 });
                 if(sessionStorage.getItem('isAdmin') === 'true') fetchLogs(); 
             } catch(e) { console.error("로그 저장 실패", e); }
         }
 
-        // ✅ 최근 50개 로그 불러오기 (화면 표시용)
         async function fetchLogs() {
             try {
                 const { data: logs } = await client.from('action_logs').select('*').order('created_at', { ascending: false }).limit(50);
@@ -143,7 +141,6 @@
                 }
                 logContainer.innerHTML = logs.map(l => {
                     const time = new Date(l.created_at).toLocaleTimeString('ko-KR', {hour: '2-digit', minute:'2-digit'});
-                    // 화면에 [IP: 123.456.xxx.xxx] 처럼 표시 (뒷자리는 친구들끼리니 그냥 다 보여줘도 됩니다)
                     const ipDisplay = l.ip_address ? `(${l.ip_address})` : '(IP없음)';
                     return `<div><span class="text-gray-500">[${time}]</span> <span class="text-blue-300 font-bold">${l.user_name} <span class="text-[10px] text-gray-500">${ipDisplay}</span></span>: <span class="text-yellow-300">${l.action_type}</span> <span class="text-gray-400">- ${l.details}</span></div>`;
                 }).join('');
@@ -160,7 +157,7 @@
         }
 
         async function init() { 
-            await fetchIP(); // 시작할 때 무조건 IP 먼저 가져오기
+            await fetchIP(); 
             if (currentUser) document.getElementById('current-user').value = currentUser; 
             setSyncDateToTomorrow();
             loadData(); 
@@ -184,7 +181,7 @@
             if(action !== 'show_menu' && !checkAuth()) return;
             if(action === 'show_menu') {
                 document.getElementById('admin-menu').classList.remove('hidden');
-                fetchLogs(); // 메뉴 열 때 로그 가져오기
+                fetchLogs(); 
             }
             if(action === 'create') createMatch();
             if(action === 'finish') finishMatch(args[0]);
@@ -462,8 +459,10 @@
             loadData(); 
         }
         
+        // ✅ 바로 이 부분의 ID를 일치되게 수정했습니다.
         async function finishMatch(id) {
-            const sA = document.getElementById(`scoreA-${id}`).value, sB = document.getElementById(`scoreB-${id}`).value;
+            const sA = document.getElementById(`sA-${id}`).value;
+            const sB = document.getElementById(`sB-${id}`).value;
             if(!sA || !sB) return alert("점수 입력 필수!");
             await client.from('matches').update({ score_a: sA, score_b: sB, status: 'finished' }).match({ id: id });
             logAction('결과확정', `경기ID:${id} 스코어 ${sA}:${sB} 입력`);
