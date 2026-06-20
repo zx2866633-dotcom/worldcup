@@ -27,7 +27,7 @@
             <div class="flex justify-between items-end border-b border-gray-600 pb-2 mb-3">
                 <h3 class="text-lg font-bold text-yellow-400">💸 개인별 누적 성의 (1,500원/회)</h3>
                 <div class="text-right">
-                    <span class="text-xs text-gray-300">총 모금액 (수금완료 기준)</span>
+                    <span class="text-xs text-gray-300">총 모금액 (정산완료 기준)</span>
                     <br>
                     <span id="total-fund" class="text-2xl font-black text-green-400">0원</span>
                 </div>
@@ -138,26 +138,29 @@
                 const logContainer = document.getElementById('admin-log-list');
                 if(!logs || logs.length === 0) { logContainer.innerHTML = "기록된 로그가 없습니다."; return; }
                 logContainer.innerHTML = logs.map(l => {
-                    const time = new Date(l.created_at).toLocaleTimeString('ko-KR', {hour: '2-digit', minute:'2-digit'});
+                    // 한국 시간으로 정확하게 표시하기 위해 timeZone 옵션 추가
+                    const kstDate = new Date(l.created_at).toLocaleDateString('ko-KR', {month: 'short', day: 'numeric', timeZone: 'Asia/Seoul'});
+                    const kstTime = new Date(l.created_at).toLocaleTimeString('ko-KR', {hour: '2-digit', minute:'2-digit', timeZone: 'Asia/Seoul'});
                     const ipDisplay = l.ip_address ? `(${l.ip_address})` : '(IP없음)';
-                    return `<div><span class="text-gray-500">[${time}]</span> <span class="text-blue-300 font-bold">${l.user_name} <span class="text-[10px] text-gray-500">${ipDisplay}</span></span>: <span class="text-yellow-300">${l.action_type}</span> <span class="text-gray-400">- ${l.details}</span></div>`;
+                    return `<div><span class="text-gray-500">[${kstDate} ${kstTime}]</span> <span class="text-blue-300 font-bold">${l.user_name} <span class="text-[10px] text-gray-500">${ipDisplay}</span></span>: <span class="text-yellow-300">${l.action_type}</span> <span class="text-gray-400">- ${l.details}</span></div>`;
                 }).join('');
             } catch(e) { console.error(e); }
         }
 
-        function setSyncDateToTomorrow() {
+        // ✅ 기본 날짜를 '오늘(한국시간 기준)'로 변경
+        function setSyncDateToToday() {
             const now = new Date();
-            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000 + (9 * 60 * 60 * 1000));
-            const yyyy = tomorrow.getUTCFullYear();
-            const mm = String(tomorrow.getUTCMonth() + 1).padStart(2, '0');
-            const dd = String(tomorrow.getUTCDate()).padStart(2, '0');
+            const today = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+            const yyyy = today.getUTCFullYear();
+            const mm = String(today.getUTCMonth() + 1).padStart(2, '0');
+            const dd = String(today.getUTCDate()).padStart(2, '0');
             document.getElementById('sync-date').value = `${yyyy}-${mm}-${dd}`;
         }
 
         async function init() { 
             await fetchIP(); 
             if (currentUser) document.getElementById('current-user').value = currentUser; 
-            setSyncDateToTomorrow();
+            setSyncDateToToday();
             loadData(); 
         }
 
@@ -172,11 +175,12 @@
             if (sessionStorage.getItem('isAdmin') === 'true') return true;
             const input = prompt("방장 비밀번호:");
             if (input === ADMIN_PASSWORD) { sessionStorage.setItem('isAdmin', 'true'); return true; }
-            alert("비밀번호 틀림."); return false;
+            alert("비밀번호가 틀렸습니다."); return false;
         }
 
+        // ✅ 이제 모든 관리자 행동(메뉴 열기 포함)에서 비밀번호를 검사합니다.
         function handleAdminAction(action, ...args) {
-            if(action !== 'show_menu' && !checkAuth()) return;
+            if(!checkAuth()) return; // 비밀번호 모르면 바로 차단!
             if(action === 'show_menu') { document.getElementById('admin-menu').classList.remove('hidden'); fetchLogs(); }
             if(action === 'create') createMatch();
             if(action === 'finish') finishMatch(args[0]);
@@ -411,12 +415,14 @@
                     return;
                 }
 
+                // ✅ 진행 중인 경기(Open/Closed)에도 방장 전용 픽수정 버튼 추가
                 let cardHTML = `
                 <div class="border-2 border-blue-300 bg-white rounded-xl p-5 relative shadow-md mb-4">
                     <span class="absolute -top-3 left-4 bg-gray-700 text-white px-2 py-1 rounded text-xs shadow">ID: ${match.id} ${match.status === 'closed' ? '(마감됨)' : ''}</span>
                     <div class="absolute top-2 right-4 flex gap-1 items-center">
-                        <button onclick="editMatch(${match.id}, '${match.team_a}', '${match.team_b}', ${match.handicap})" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">✏️경기수정</button>
-                        <button onclick="deleteMatch(${match.id})" class="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">🗑️</button>
+                        <button onclick="editBetsAdmin(${match.id})" class="text-[10px] bg-purple-100 text-purple-800 px-2 py-1 rounded">✏️픽수정</button>
+                        <button onclick="editMatch(${match.id}, '${match.team_a}', '${match.team_b}', ${match.handicap})" class="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded">✏️경기수정</button>
+                        <button onclick="deleteMatch(${match.id})" class="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded">🗑️</button>
                     </div>
                     <div class="text-center mb-4 mt-2">
                         <span class="text-xl font-black text-gray-800">${match.team_a}</span> vs <span class="text-xl font-black text-gray-800">${match.team_b}</span>
@@ -432,12 +438,12 @@
             });
         }
 
+        // ✅ 총 모금액을 정산완료(Finished) + 수금완료(Paid) 모든 경기를 합산하여 계산
         function calculateLeaderboard(matches, bets) {
             const allSettled = matches.filter(m => m.status === 'finished' || m.status === 'paid');
-            const onlyPaid = matches.filter(m => m.status === 'paid');
             
             let misses = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
-            let paidMissesCount = 0;
+            let totalMissesCount = 0; // 정산완료 기준 총 모금액 변수
             
             allSettled.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
@@ -448,30 +454,29 @@
                         const bet = matchBets.find(b => b.player_name === p);
                         if (!bet || bet.pick !== winner) {
                             misses[p]++;
+                            totalMissesCount++; // 정산완료된 벌금 발생 즉시 누적
                         }
                     });
                 }
             });
 
-            onlyPaid.forEach(match => {
-                const matchBets = bets.filter(b => b.match_id === match.id);
-                const adjA = Number(match.score_a) + Number(match.handicap);
-                let winner = (adjA > Number(match.score_b)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
-                if(winner !== 'D') {
-                    players.forEach(p => {
-                        const bet = matchBets.find(b => b.player_name === p);
-                        if (!bet || bet.pick !== winner) {
-                            paidMissesCount++;
-                        }
-                    });
-                }
-            });
-
-            document.getElementById('total-fund').innerText = (paidMissesCount * 1500).toLocaleString() + '원';
+            // 화면 상단 '총 모금액 (정산완료 기준)' 업데이트
+            document.getElementById('total-fund').innerText = (totalMissesCount * 1500).toLocaleString() + '원';
 
             const sorted = Object.entries(misses).sort((a,b) => b[1]-a[1]);
-            document.getElementById('leaderboard').innerHTML = sorted.map(([n, c]) => 
-                `<li class="flex justify-between bg-gray-700 p-2 rounded"><span>👤 ${n}</span><span class="${c>0?'text-red-400':'text-green-400'} font-bold">${(c * 1500).toLocaleString()}원 (${c}회)</span></li>`).join('');
+            const maxMisses = sorted[0][1]; // 가장 많이 틀린 사람의 횟수
+
+            document.getElementById('leaderboard').innerHTML = sorted.map(([n, c]) => {
+                // ✅ 1등(제일 많이 틀린 사람)에게 왕관 씌우기! (0원일 때는 달지 않음)
+                const isFirstPlace = (c > 0 && c === maxMisses);
+                const crownIcon = isFirstPlace ? '👑' : '👤';
+                const displayName = isFirstPlace ? `👑 ${n} 👑` : n;
+
+                return `<li class="flex justify-between items-center bg-gray-700 p-2 rounded">
+                    <span>${crownIcon} <span class="font-medium">${displayName}</span></span>
+                    <span class="${c>0?'text-red-400':'text-green-400'} font-bold">${(c * 1500).toLocaleString()}원 (${c}회)</span>
+                </li>`;
+            }).join('');
         }
 
         async function placeBet(matchId, pick, teamName) {
@@ -535,13 +540,11 @@
             }
         }
 
-        // ✅ 방장의 픽 강제수정 로직 튼튼하게 개선
         async function editBetsAdmin(matchId) {
             if(!checkAuth()) return;
             const input = prompt("박형철, 와대, 손호민, 최석훈 님의 베팅을 순서대로 입력하세요.\n(A: 왼쪽팀 승, B: 오른쪽팀 승, X: 미참여)\n\n입력 예시: ABXA 또는 A,B,X,A");
             if(!input) return;
             
-            // 공백, 쉼표, 특수문자 다 무시하고 A, B, X, a, b, x 등 알파벳만 뽑아냄
             const cleanPicks = input.replace(/[^a-zA-Z]/g, '').toUpperCase();
             if(cleanPicks.length !== 4) {
                 return alert("A, B, X 중 하나씩 총 4명 분의 픽을 정확히 입력해주세요!\n(예시: ABXA)");
@@ -550,10 +553,8 @@
             const picks = cleanPicks.split('');
 
             try {
-                // 1. 해당 경기의 기존 픽 싹 다 삭제
                 await client.from('bets').delete().eq('match_id', matchId);
                 
-                // 2. 새 픽 준비
                 const newBets = [];
                 for(let i=0; i<4; i++) {
                     if(picks[i] === 'A' || picks[i] === 'B') {
@@ -561,7 +562,6 @@
                     }
                 }
 
-                // 3. 한 방에 밀어넣기
                 if (newBets.length > 0) {
                     await client.from('bets').insert(newBets);
                 }
@@ -571,7 +571,7 @@
                 loadData();
             } catch(e) {
                 console.error(e);
-                alert("수정 중 오류가 발생했습니다. (자세한 내용은 콘솔 확인)");
+                alert("수정 중 오류가 발생했습니다.");
             }
         }
         
