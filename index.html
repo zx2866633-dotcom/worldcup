@@ -159,7 +159,6 @@
                 const logContainer = document.getElementById('admin-log-list');
                 if(!logs || logs.length === 0) { logContainer.innerHTML = "기록된 로그가 없습니다."; return; }
                 logContainer.innerHTML = logs.map(l => {
-                    // ✅ 시간 버그 수정: 중복으로 더해지는 9시간을 다시 강제로 빼서 정상적인 KST로 맞춤
                     const dbDate = new Date(l.created_at);
                     dbDate.setHours(dbDate.getHours() - 9); 
                     
@@ -484,7 +483,8 @@
             const onlyFinished = matches.filter(m => m.status === 'finished'); 
             
             let misses = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
-            let pendingMisses = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
+            // ✅ 숫자 세기에서 배열 저장으로 변경하여 틀린 경기 목록을 모읍니다
+            let pendingDetails = { '박형철': [], '와대': [], '손호민': [], '최석훈': [] }; 
             let totalSettledCount = 0; 
             
             allSettled.forEach(match => {
@@ -510,7 +510,8 @@
                     players.forEach(p => {
                         const bet = matchBets.find(b => b.player_name === p);
                         if (!bet || bet.pick !== winner) {
-                            pendingMisses[p]++;
+                            // ✅ 틀린 경기 이름을 배열에 저장합니다
+                            pendingDetails[p].push(`${match.team_a} vs ${match.team_b}`);
                         }
                     });
                 }
@@ -532,9 +533,20 @@
                 </li>`;
             }).join('');
 
-            const pendingHtml = Object.entries(pendingMisses)
-                .filter(([n, c]) => c > 0)
-                .map(([n, c]) => `<li class="flex justify-between items-center bg-red-900 bg-opacity-40 p-2.5 rounded-lg border border-red-800 shadow-sm"><span class="font-bold text-red-300 tracking-wide">💸 ${n}</span><span class="text-red-400 font-black text-base">${(c * 1500).toLocaleString()}원</span></li>`)
+            // ✅ 틀린 경기 목록(배열)을 꺼내서 화면에 예쁘게 렌더링
+            const pendingHtml = Object.entries(pendingDetails)
+                .filter(([n, matchesArr]) => matchesArr.length > 0)
+                .map(([n, matchesArr]) => {
+                    const amount = matchesArr.length * 1500;
+                    const matchText = matchesArr.join(', ');
+                    return `<li class="flex flex-col bg-red-900 bg-opacity-40 p-3 rounded-lg border border-red-800 shadow-sm mb-2">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-red-300 tracking-wide">💸 ${n}</span>
+                            <span class="text-red-400 font-black text-base">${amount.toLocaleString()}원</span>
+                        </div>
+                        <div class="text-xs text-gray-400">(${matchText})</div>
+                    </li>`;
+                })
                 .join('');
 
             document.getElementById('pending-payments').innerHTML = pendingHtml || '<li class="text-center text-gray-400 py-3 bg-gray-700 rounded-lg text-sm font-medium">수금 대기 중인 금액이 없습니다 👏</li>';
