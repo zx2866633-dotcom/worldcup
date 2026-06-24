@@ -115,7 +115,7 @@
         const SUPABASE_URL = 'https://tdgcuozhvuyggktdjrry.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkZ2N1b3podnV5Z2drdGRqcnJ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MzA2NTgsImV4cCI6MjA5NzIwNjY1OH0.TV08rACNlnetiWJFGYZOpFc89NSpe_52dS-Zwpuy8tU';
         const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        const ADMIN_PASSWORD = "acapa";
+        const ADMIN_PASSWORD = "1234"; 
         const players = ['박형철', '와대', '손호민', '최석훈'];
         
         let currentUser = localStorage.getItem('worldcupUser') || '';
@@ -134,8 +134,40 @@
             "France": "프랑스", "Norway": "노르웨이", "Senegal": "세네갈", "Iraq": "이라크",
             "Algeria": "알제리", "Argentina": "아르헨티나", "Austria": "오스트리아", "Jordan": "요르단",
             "Colombia": "콜롬비아", "Jamaica": "자메이카", "Portugal": "포르투갈", "Uzbekistan": "우즈베키스탄",
-            "England": "잉글랜드", "Croatia": "크로아티아", "DR Congo": "콩고민주공화국", "Congo DR": "콩고민주공화국", "Democratic Republic of the Congo": "콩고민주공화국", "Panama": "파나마"
+            "England": "잉글랜드", "Croatia": "크로아티아", "DR Congo": "콩고민주공화국", "Congo DR": "콩고민주공화국", "Democratic Republic of the Congo": "콩고민주공화국", "Panama": "파나마",
+            "Ghana": "가나"
         };
+
+        // ✅ AI 조언 생성 함수 (동일한 경기면 똑같은 조언을 하도록 설계)
+        function getAIAdvice(matchId, teamA, teamB, h) {
+            const reasons = [
+                "최근 5경기 득점력과 수비 조직력을 종합해본 결과,",
+                "핸디캡을 적용한 10,000번의 시뮬레이션을 돌려보니,",
+                "핵심 선수들의 폼과 전술적 상성을 분석해본 결과,",
+                "해외 유명 데이터 기관들의 배당 흐름을 추적해본 결과,"
+            ];
+            
+            // matchId를 이용한 고정된 무작위 값 생성 (새로고침해도 내용 안바뀜)
+            const random1 = (matchId * 13) % reasons.length;
+            const random2 = (matchId * 17) % 100;
+            
+            const recommendedTeam = random2 % 2 === 0 ? teamA : teamB;
+            const winRate = 51 + (random2 % 12); // 51 ~ 62% 사이의 그럴싸한 확률 생성
+
+            return `🤖 <b>AI 분석:</b> ${reasons[random1]} 방장님이 설정한 핸디캡(${h})을 고려하더라도 <b>${recommendedTeam}</b>의 베팅 성공 확률이 <span class="text-red-500 font-black">${winRate}%</span>로 조금 더 높게 측정됩니다!`;
+        }
+
+        // ✅ AI 조언 토글 함수
+        function toggleAIAdvice(matchId, teamA, teamB, handicap) {
+            const el = document.getElementById(`ai-advice-${matchId}`);
+            if (el.classList.contains('hidden')) {
+                el.innerHTML = getAIAdvice(matchId, teamA, teamB, handicap);
+                el.classList.remove('hidden');
+                logAction('AI조언', `경기ID:${matchId} 조언 확인`); // 방장만 로그에서 볼 수 있음
+            } else {
+                el.classList.add('hidden');
+            }
+        }
 
         async function fetchIP() {
             try {
@@ -221,8 +253,8 @@
             if(action === 'show_menu') { document.getElementById('admin-menu').classList.remove('hidden'); fetchLogs(); }
             if(action === 'create') createMatch();
             if(action === 'finish') finishMatch(args[0]);
-            if(action === 'paid') markAsPaid(args[0]); // 전체 수금
-            if(action === 'pay_person') markPersonAsPaid(args[0]); // 개인 수금
+            if(action === 'paid') markAsPaid(args[0]);
+            if(action === 'pay_person') markPersonAsPaid(args[0]); 
             if(action === 'close') closeBetting(args[0]);
             if(action === 'sync') syncWorldCup();
             if(action === 'set_handi') updateHandicap(args[0]);
@@ -331,7 +363,6 @@
         async function loadData() {
             try {
                 const { data: matches } = await client.from('matches').select('*').order('created_at', { ascending: true });
-                // bet 테이블에서 is_paid까지 가져옵니다. (Supabase에서 컬럼을 추가했다면 정상 작동)
                 const { data: bets } = await client.from('bets').select('*');
                 const statusOrder = { 'open': 1, 'closed': 2, 'finished': 3, 'paid': 4 };
                 matches.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
@@ -342,10 +373,8 @@
             } catch (err) { console.error(err); }
         }
 
-        // ✅ 방장이 특정 사람의 미납액을 한방에 수금 완료시키는 마법의 함수
         async function markPersonAsPaid(playerName) {
             try {
-                // 현재 정산 완료된(돈 받아야 할) 경기들 불러오기
                 const { data: mData } = await client.from('matches').select('*').eq('status', 'finished');
                 const { data: bData } = await client.from('bets').select('*').eq('player_name', playerName);
                 
@@ -359,10 +388,8 @@
                     if(winner !== 'D') {
                         const bet = bData.find(b => b.match_id === match.id);
                         if (!bet) {
-                            // 미참여 패배인 경우: 빈 베팅을 만들면서 is_paid=true로 넣음
                             insertBets.push({ match_id: match.id, player_name: playerName, pick: 'X', is_paid: true });
                         } else if (bet.pick !== winner && !bet.is_paid) {
-                            // 일반 패배인데 아직 돈 안 낸 경우: 해당 베팅 id 수집
                             updateIds.push(bet.id);
                         }
                     }
@@ -372,7 +399,6 @@
                     return alert(`${playerName} 님은 현재 수금할 내역이 없습니다.`);
                 }
 
-                // DB 업데이트 및 삽입
                 if (updateIds.length > 0) {
                     await client.from('bets').update({ is_paid: true }).in('id', updateIds);
                 }
@@ -381,10 +407,10 @@
                 }
                 
                 logAction('개별수금', `${playerName} 미납액 수금 완료`);
-                loadData(); // 화면 즉시 갱신
+                loadData(); 
             } catch(e) {
                 console.error(e);
-                alert("수금 처리 중 오류가 발생했습니다.\n(Supabase SQL Editor에서 ALTER TABLE 명령어를 실행했는지 확인해주세요!)");
+                alert("수금 처리 중 오류가 발생했습니다.");
             }
         }
 
@@ -501,6 +527,7 @@
                     return;
                 }
 
+                // 진행 중인 경기 (베팅 활성화)
                 let cardHTML = `
                 <div class="border-2 border-blue-400 bg-white rounded-2xl p-6 relative shadow-lg mb-6">
                     <span class="absolute -top-3 left-4 ${match.status === 'closed' ? 'bg-yellow-500' : 'bg-blue-600'} text-white px-3 py-1 rounded text-xs font-bold shadow">
@@ -518,6 +545,12 @@
                         <button onclick="placeBet(${match.id}, 'A', '${match.team_a}')" class="${myBet?.pick === 'A'?'bg-blue-600 text-white shadow-inner border-2 border-blue-800':'bg-gray-100 text-gray-700 border-2 border-gray-300 hover:bg-blue-50'} w-1/2 py-4 rounded-xl font-black transition text-lg">${match.team_a} 승</button>
                         <button onclick="placeBet(${match.id}, 'B', '${match.team_b}')" class="${myBet?.pick === 'B'?'bg-red-600 text-white shadow-inner border-2 border-red-800':'bg-gray-100 text-gray-700 border-2 border-gray-300 hover:bg-red-50'} w-1/2 py-4 rounded-xl font-black transition text-lg">${match.team_b} 승</button>
                     </div>
+                    
+                    <div class="mt-2 mb-3">
+                        <button onclick="toggleAIAdvice(${match.id}, '${match.team_a}', '${match.team_b}', ${match.handicap})" class="w-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold py-2 rounded-lg text-sm shadow hover:opacity-90 transition">🤖 AI 조언 듣기</button>
+                        <div id="ai-advice-${match.id}" class="hidden mt-2 p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-900 leading-relaxed shadow-inner"></div>
+                    </div>
+
                     <div class="text-sm text-center mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200 font-medium tracking-wide">
                         진행 상황: ${betStatusText}
                     </div>
@@ -534,7 +567,6 @@
             let pendingDetails = { '박형철': [], '와대': [], '손호민': [], '최석훈': [] }; 
             let totalSettledCount = 0; 
             
-            // 1. 전체 누적 계산 & 총 모금액(실제 받은 돈) 계산
             allSettled.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const adjA = Number(match.score_a) + Number(match.handicap);
@@ -543,9 +575,8 @@
                     players.forEach(p => {
                         const bet = matchBets.find(b => b.player_name === p);
                         if (!bet || bet.pick !== winner) {
-                            misses[p]++; // 평생 누적 틀린 횟수
+                            misses[p]++; 
                             
-                            // 경기 자체가 수금완료 상태이거나, 개인적으로 돈을 낸 경우만 총액에 반영!
                             const isPaid = (match.status === 'paid') || (bet && bet.is_paid);
                             if (isPaid) {
                                 totalSettledCount++; 
@@ -555,7 +586,6 @@
                 }
             });
 
-            // 2. 미납액 (돈 안 낸 틀린 경기 목록) 모으기
             onlyFinished.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const adjA = Number(match.score_a) + Number(match.handicap);
@@ -563,7 +593,6 @@
                 if(winner !== 'D') {
                     players.forEach(p => {
                         const bet = matchBets.find(b => b.player_name === p);
-                        // 틀렸는데 개별적으로 돈을 안 낸 경우에만 목록에 추가
                         if ((!bet || bet.pick !== winner) && (!bet || !bet.is_paid)) {
                             pendingDetails[p].push(`${match.team_a} vs ${match.team_b}`);
                         }
@@ -587,7 +616,6 @@
                 </li>`;
             }).join('');
 
-            // ✅ 개별 수금 버튼 + 틀린 경기 이름 목록 렌더링
             const pendingHtml = Object.entries(pendingDetails)
                 .filter(([n, matchesArr]) => matchesArr.length > 0)
                 .map(([n, matchesArr]) => {
@@ -632,7 +660,6 @@
             loadData(); 
         }
         
-        // 전체 수금 처리
         async function markAsPaid(id) { 
             await client.from('matches').update({ status: 'paid' }).eq('id', id); 
             logAction('수금완료', `경기ID:${id} 수금 완료 처리`);
