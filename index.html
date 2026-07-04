@@ -36,7 +36,7 @@
 
         <div class="bg-gray-800 p-4 rounded-xl mb-6 shadow-inner text-white">
             <div class="flex justify-between items-end border-b border-gray-600 pb-2 mb-3">
-                <h3 class="text-lg font-bold text-yellow-400">💸 개인별 누적 성의</h3>
+                <h3 class="text-lg font-bold text-yellow-400">💸 개인별 누적 벌금</h3>
                 <div class="text-right">
                     <span class="text-xs text-gray-300">총 모금 누적액</span>
                     <br>
@@ -91,17 +91,31 @@
             <h3 class="font-bold text-blue-800 mb-2">🌐 월드컵 자동 동기화 (ESPN)</h3>
             <div class="flex gap-2 items-center mb-2">
                 <input type="date" id="sync-date" class="border p-2 rounded text-sm flex-grow font-mono">
-                <button onclick="handleAdminAction('sync')" class="bg-blue-600 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 transition text-sm whitespace-nowrap shadow-sm">🔄 가져오기</button>
+                <select id="sync-penalty" class="border p-2 rounded text-sm font-bold text-red-600 outline-none">
+                    <option value="1500">조별 (1.5k)</option>
+                    <option value="3000" selected>16강 (3k)</option>
+                    <option value="6000">8강 (6k)</option>
+                    <option value="12000">4강 (12k)</option>
+                    <option value="24000">결승 (24k)</option>
+                </select>
+                <button onclick="handleAdminAction('sync')" class="bg-blue-600 text-white px-3 py-2 rounded font-bold hover:bg-blue-700 transition text-sm shadow-sm">🔄 가져오기</button>
             </div>
         </div>
 
         <div class="bg-white p-4 rounded border mb-4">
             <h3 class="font-bold text-gray-700 mb-2">1. 수동 경기 등록</h3>
             <div class="flex flex-wrap gap-2 items-center mb-2">
-                <input type="text" id="new-teamA" class="w-24 border rounded p-2 text-sm text-center" placeholder="국가A">
+                <input type="text" id="new-teamA" class="w-20 border rounded p-2 text-sm text-center" placeholder="국가A">
                 <span class="font-bold text-gray-400">VS</span>
-                <input type="text" id="new-teamB" class="w-24 border rounded p-2 text-sm text-center" placeholder="국가B">
-                <input type="text" id="new-handi" class="w-16 border rounded p-2 text-sm text-center" placeholder="핸디" value="2.5">
+                <input type="text" id="new-teamB" class="w-20 border rounded p-2 text-sm text-center" placeholder="국가B">
+                <input type="text" id="new-handi" class="w-14 border rounded p-2 text-sm text-center" placeholder="핸디" value="2.5">
+                <select id="new-penalty" class="border rounded p-2 text-sm text-red-600 font-bold">
+                    <option value="1500">1,500원</option>
+                    <option value="3000" selected>3,000원</option>
+                    <option value="6000">6,000원</option>
+                    <option value="12000">12,000원</option>
+                    <option value="24000">24,000원</option>
+                </select>
             </div>
             <button onclick="handleAdminAction('create')" class="w-full bg-gray-600 text-white p-2 rounded font-bold hover:bg-gray-700 text-sm">수동 열기</button>
         </div>
@@ -158,20 +172,14 @@
 
         function toggleMatchHistory(matchId, korTeamA, korTeamB) {
             const el = document.getElementById(`history-box-${matchId}`);
-            if (!el.classList.contains('hidden')) {
-                el.classList.add('hidden');
-                return;
-            }
+            if (!el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
 
-            let historyA = [];
-            let historyB = [];
+            let historyA = []; let historyB = [];
 
             allDbMatches.forEach(match => {
                 if (match.status === 'finished' || match.status === 'paid') {
-                    const hName = match.team_a;
-                    const aName = match.team_b;
-                    const hScore = match.score_a;
-                    const aScore = match.score_b;
+                    const hName = match.team_a; const aName = match.team_b;
+                    const hScore = match.score_a; const aScore = match.score_b;
                     
                     const matchHtml = `
                         <div class="flex justify-between items-center text-xs bg-gray-50 py-2 px-3 rounded-lg border border-gray-200 font-mono shadow-sm animate-fade-in mb-1.5">
@@ -207,11 +215,8 @@
         }
 
         async function fetchIP() {
-            try {
-                const response = await fetch('https://api.ipify.org?format=json');
-                const data = await response.json();
-                currentIP = data.ip;
-            } catch(e) { console.error("IP 가져오기 실패"); }
+            try { const response = await fetch('https://api.ipify.org?format=json'); const data = await response.json(); currentIP = data.ip; } 
+            catch(e) { console.error("IP 가져오기 실패"); }
         }
 
         async function logAction(actionType, details) {
@@ -228,8 +233,7 @@
                 const logContainer = document.getElementById('admin-log-list');
                 if(!logs || logs.length === 0) { logContainer.innerHTML = "기록된 로그가 없습니다."; return; }
                 logContainer.innerHTML = logs.map(l => {
-                    const dbDate = new Date(l.created_at);
-                    dbDate.setHours(dbDate.getHours() - 9); 
+                    const dbDate = new Date(l.created_at); dbDate.setHours(dbDate.getHours() - 9); 
                     const kstDate = dbDate.toLocaleDateString('ko-KR', {month: 'short', day: 'numeric'});
                     const kstTime = dbDate.toLocaleTimeString('ko-KR', {hour: '2-digit', minute:'2-digit'});
                     const ipDisplay = l.ip_address ? `(${l.ip_address})` : '(IP없음)';
@@ -239,30 +243,21 @@
         }
 
         function setSyncDateToToday() {
-            const now = new Date();
-            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-            const kst = new Date(utc + (9 * 60 * 60 * 1000));
-            const yyyy = kst.getFullYear();
-            const mm = String(kst.getMonth() + 1).padStart(2, '0');
-            const dd = String(kst.getDate()).padStart(2, '0');
+            const now = new Date(); const utc = now.getTime() + (now.getTimezoneOffset() * 60000); const kst = new Date(utc + (9 * 60 * 60 * 1000));
+            const yyyy = kst.getFullYear(); const mm = String(kst.getMonth() + 1).padStart(2, '0'); const dd = String(kst.getDate()).padStart(2, '0');
             document.getElementById('sync-date').value = `${yyyy}-${mm}-${dd}`;
         }
 
         async function init() { 
-            await fetchIP(); 
-            setSyncDateToToday();
-            if (currentUser) {
-                document.getElementById('popup-user-select').value = currentUser;
-                document.getElementById('display-current-user').innerText = currentUser;
-            }
+            await fetchIP(); setSyncDateToToday();
+            if (currentUser) { document.getElementById('popup-user-select').value = currentUser; document.getElementById('display-current-user').innerText = currentUser; }
             loadData(); 
         }
 
         function confirmUserPopup() {
             const selected = document.getElementById('popup-user-select').value;
             if (!selected) return alert('본인의 이름을 반드시 선택해주세요!');
-            currentUser = selected;
-            localStorage.setItem('worldcupUser', currentUser);
+            currentUser = selected; localStorage.setItem('worldcupUser', currentUser);
             document.getElementById('display-current-user').innerText = currentUser;
             document.getElementById('user-popup').classList.add('hidden');
             logAction('접속', `${currentUser} 접속 및 이름설정 완료`);
@@ -273,8 +268,7 @@
             if (isAdminLoggedIn) return true;
             const input = prompt("🔒 방장 전용 기능입니다. 비밀번호를 입력하세요:");
             if (input === ADMIN_PASSWORD) { isAdminLoggedIn = true; return true; }
-            if (input !== null) alert("비밀번호가 틀렸습니다!"); 
-            return false;
+            if (input !== null) alert("비밀번호가 틀렸습니다!"); return false;
         }
 
         function handleAdminAction(action, ...args) {
@@ -292,49 +286,34 @@
         }
 
         function logoutAdmin() { isAdminLoggedIn = false; document.getElementById('admin-menu').classList.add('hidden'); alert('관리자 모드가 잠금 처리되었습니다.'); }
-
-        async function clearLogs() {
-            if(!confirm("모든 로그 기록을 삭제하시겠습니까?")) return;
-            await client.from('action_logs').delete().neq('id', 0);
-            logAction('시스템', '로그 파일 초기화 완료');
-            fetchLogs();
-        }
+        async function clearLogs() { if(!confirm("모든 로그 기록을 삭제하시겠습니까?")) return; await client.from('action_logs').delete().neq('id', 0); logAction('시스템', '로그 파일 초기화 완료'); fetchLogs(); }
 
         function togglePaidMatches() {
-            const el = document.getElementById('paid-matches-container');
-            const icon = document.getElementById('paid-toggle-icon');
-            if(el.classList.contains('hidden')) { el.classList.remove('hidden'); icon.innerText = '🔼'; } 
-            else { el.classList.add('hidden'); icon.innerText = '🔽'; }
+            const el = document.getElementById('paid-matches-container'); const icon = document.getElementById('paid-toggle-icon');
+            if(el.classList.contains('hidden')) { el.classList.remove('hidden'); icon.innerText = '🔼'; } else { el.classList.add('hidden'); icon.innerText = '🔽'; }
         }
 
         async function performSync(dateVal, showSuccessAlert = true) {
+            // 이번 동기화에 사용할 판돈 가져오기 (퍼블릭 동기화면 1500, 관리자 메뉴면 선택된 값)
+            const syncPenalty = showSuccessAlert ? (parseInt(document.getElementById('sync-penalty').value) || 1500) : 1500;
+
             try {
-                const targetDate = new Date(dateVal);
-                const prevDate = new Date(targetDate);
-                prevDate.setDate(targetDate.getDate() - 1);
-
-                const date1 = prevDate.toISOString().split('T')[0].replace(/-/g, '');
-                const date2 = dateVal.replace(/-/g, '');
-
+                const targetDate = new Date(dateVal); const prevDate = new Date(targetDate); prevDate.setDate(targetDate.getDate() - 1);
+                const date1 = prevDate.toISOString().split('T')[0].replace(/-/g, ''); const date2 = dateVal.replace(/-/g, '');
                 const [res1, res2] = await Promise.all([
                     fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date1}`),
                     fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date2}`)
                 ]);
-                
-                const data1 = await res1.json();
-                const data2 = await res2.json();
-
+                const data1 = await res1.json(); const data2 = await res2.json();
                 let allEvents = [];
                 if (data1.events) allEvents = allEvents.concat(data1.events);
                 if (data2.events) allEvents = allEvents.concat(data2.events);
-
                 const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
                 const { data: dbMatches } = await client.from('matches').select('*');
                 let newCount = 0, updateCount = 0;
 
                 for (const event of uniqueEvents) {
-                    const matchDateUtc = new Date(event.date);
-                    const kstTime = matchDateUtc.getTime() + (9 * 60 * 60 * 1000);
+                    const matchDateUtc = new Date(event.date); const kstTime = matchDateUtc.getTime() + (9 * 60 * 60 * 1000);
                     const matchKstStr = new Date(kstTime).toISOString().split('T')[0];
                     if (matchKstStr !== dateVal) continue;
 
@@ -344,12 +323,10 @@
                     
                     const teamA = teamDictionary[home.team.name] || home.team.name;
                     const teamB = teamDictionary[away.team.name] || away.team.name;
-                    const scoreA = parseInt(home.score) || 0;
-                    const scoreB = parseInt(away.score) || 0;
+                    const scoreA = parseInt(home.score) || 0; const scoreB = parseInt(away.score) || 0;
                     const isFinished = event.status.type.state === 'post' || event.status.type.completed;
                     
                     const existingMatch = dbMatches.find(m => m.team_a === teamA && m.team_b === teamB);
-
                     if (existingMatch) {
                         if (isFinished && existingMatch.status !== 'finished' && existingMatch.status !== 'paid') {
                             await client.from('matches').update({ score_a: scoreA, score_b: scoreB, status: 'finished' }).eq('id', existingMatch.id);
@@ -358,15 +335,14 @@
                     } else {
                         let initialStatus = isFinished ? 'finished' : 'open';
                         await client.from('matches').insert({ 
-                            team_a: teamA, team_b: teamB, handicap: 0, status: initialStatus, score_a: scoreA, score_b: scoreB, created_at: event.date 
+                            team_a: teamA, team_b: teamB, handicap: 0, penalty_amount: syncPenalty, status: initialStatus, score_a: scoreA, score_b: scoreB, created_at: event.date 
                         });
                         newCount++;
                     }
                 }
                 if (showSuccessAlert) { alert(`🌐 동기화 완료! (한국시간 ${dateVal} 기준)\n새로운 경기: ${newCount}건\n자동 정산: ${updateCount}건`); }
-                logAction('API동기화', `완료 (신규:${newCount}, 정산:${updateCount})`);
-                loadData();
-                return true;
+                logAction('API동기화', `완료 (신규:${newCount}, 정산:${updateCount}) 판돈:${syncPenalty}`);
+                loadData(); return true;
             } catch(e) { console.error(e); logAction('에러', 'API 동기화 실패'); return false; }
         }
 
@@ -381,21 +357,15 @@
             if (isPublicSyncing) { return alert("⏳ 서버 보호를 위해 동기화 중이거나 쿨타임(10초) 중입니다. 잠시 후 다시 눌러주세요!"); }
             isPublicSyncing = true;
             const btn = document.getElementById('public-sync-btn');
-            btn.innerHTML = "⏳ 불러오는 중...";
-            btn.classList.add("opacity-50", "cursor-not-allowed");
+            btn.innerHTML = "⏳ 불러오는 중..."; btn.classList.add("opacity-50", "cursor-not-allowed");
 
-            const now = new Date();
-            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-            const kst = new Date(utc + (9 * 60 * 60 * 1000));
-            const yyyy = kst.getFullYear();
-            const mm = String(kst.getMonth() + 1).padStart(2, '0');
-            const dd = String(kst.getDate()).padStart(2, '0');
+            const now = new Date(); const utc = now.getTime() + (now.getTimezoneOffset() * 60000); const kst = new Date(utc + (9 * 60 * 60 * 1000));
+            const yyyy = kst.getFullYear(); const mm = String(kst.getMonth() + 1).padStart(2, '0'); const dd = String(kst.getDate()).padStart(2, '0');
             const dateVal = `${yyyy}-${mm}-${dd}`;
 
             logAction('API동기화(일반)', `오늘(${dateVal}) 새로고침 시도`);
             const success = await performSync(dateVal, false); 
             if (success) { btn.innerHTML = "✅ 새로고침 완료"; } else { btn.innerHTML = "❌ 오류 발생"; alert("데이터를 불러오는 중 오류가 발생했습니다."); }
-
             setTimeout(() => { isPublicSyncing = false; btn.innerHTML = "🔄 오늘 경기 새로고침"; btn.classList.remove("opacity-50", "cursor-not-allowed"); }, 10000);
         }
 
@@ -419,12 +389,13 @@
                 let winner = (adjA > Number(match.score_b)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
                 const d = new Date(match.created_at);
                 const kstDateStr = d.toLocaleDateString('ko-KR', {month: 'short', day: 'numeric'});
+                const penalty = match.penalty_amount || 1500;
 
                 if (!dailyData[kstDateStr]) { dailyData[kstDateStr] = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 }; }
                 if(winner !== 'D') {
                     players.forEach(p => {
                         const bet = matchBets.find(b => b.player_name === p);
-                        if (!bet || bet.pick !== winner) { dailyData[kstDateStr][p] += 1500; }
+                        if (!bet || bet.pick !== winner) { dailyData[kstDateStr][p] += penalty; }
                     });
                 }
             });
@@ -451,9 +422,7 @@
                     ]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11, weight: 'bold' } } },
                         tooltip: { callbacks: { label: function(context) { return context.dataset.label + ': ' + context.parsed.y.toLocaleString() + '원'; } } }
@@ -470,9 +439,7 @@
             try {
                 const { data: matches } = await client.from('matches').select('*').order('created_at', { ascending: true });
                 const { data: bets } = await client.from('bets').select('*');
-                
                 allDbMatches = matches || []; 
-                
                 const statusOrder = { 'open': 1, 'closed': 2, 'finished': 3, 'paid': 4 };
                 matches.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
@@ -487,8 +454,7 @@
             try {
                 const { data: mData } = await client.from('matches').select('*').eq('status', 'finished');
                 const { data: bData } = await client.from('bets').select('*').eq('player_name', playerName);
-                let updateIds = [];
-                let insertBets = [];
+                let updateIds = []; let insertBets = [];
 
                 mData.forEach(match => {
                     const adjA = Number(match.score_a) + Number(match.handicap);
@@ -499,7 +465,6 @@
                         else if (bet.pick !== winner && !bet.is_paid) { updateIds.push(bet.id); }
                     }
                 });
-
                 if (updateIds.length === 0 && insertBets.length === 0) { return alert(`${playerName} 님은 현재 수금할 내역이 없습니다.`); }
                 if (updateIds.length > 0) { await client.from('bets').update({ is_paid: true }).in('id', updateIds); }
                 if (insertBets.length > 0) { await client.from('bets').insert(insertBets); }
@@ -553,6 +518,7 @@
             matches.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const myBet = matchBets.find(b => b.player_name === currentUser);
+                const penaltyAmount = match.penalty_amount || 1500;
                 
                 let betStatusText = players.map(p => {
                     const b = matchBets.find(x => x.player_name === p);
@@ -575,7 +541,7 @@
                                 <br><span class="text-red-600 font-bold mt-1 inline-block">${penaltyText}</span>
                             </div>
                             <div class="flex gap-1 ml-2">
-                                <button onclick="deleteMatch(${match.id})" class="text-[10px] bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded hover:bg-red-200">🗑️삭제</button>
+                                <button onclick="deleteMatch(${match.id})" class="text-[10px] bg-red-100 text-red-600 border border-red-200 px-2 py-1 rounded hover:bg-red-200 font-bold">🗑️삭제</button>
                             </div>
                         </div>
                     `);
@@ -601,7 +567,10 @@
                         </div>
                         <div class="text-center mb-3 mt-4">
                             <span class="text-2xl font-black text-gray-800">${match.team_a}</span> <span class="mx-2 text-gray-400">vs</span> <span class="text-2xl font-black text-gray-800">${match.team_b}</span>
-                            <p class="text-sm text-blue-600 font-bold mt-1 inline-block bg-blue-50 px-3 py-1 rounded-full border border-blue-100">핸디캡(A): ${match.handicap}</p>
+                            <div class="mt-2 text-sm font-bold bg-blue-50 inline-block px-3 py-1 rounded-full border border-blue-100">
+                                <span class="text-blue-600 mr-2">핸디캡(A): ${match.handicap}</span>
+                                <span class="text-red-500 border-l border-blue-200 pl-2">💰 판돈: ${penaltyAmount.toLocaleString()}원</span>
+                            </div>
                         </div>
                         <div class="bg-gray-800 text-white rounded-xl text-base p-4 text-center mb-3 shadow-inner">
                             <p class="font-bold">최종 스코어: <span class="text-yellow-300 text-xl">${sA} : ${sB}</span> (핸디 결과: ${winnerText})</p>
@@ -624,7 +593,10 @@
                     </div>
                     <div class="text-center mb-5 mt-3">
                         <span class="text-2xl font-black text-gray-800">${match.team_a}</span> <span class="mx-2 text-gray-400 font-bold">vs</span> <span class="text-2xl font-black text-gray-800">${match.team_b}</span>
-                        <div class="mt-2 text-sm text-blue-600 font-bold bg-blue-50 inline-block px-3 py-1 rounded-full border border-blue-100">핸디캡(A): ${match.handicap}</div>
+                        <div class="mt-2 text-sm font-bold bg-blue-50 inline-block px-3 py-1 rounded-full border border-blue-100">
+                            <span class="text-blue-600 mr-2">핸디캡(A): ${match.handicap}</span>
+                            <span class="text-red-500 border-l border-blue-200 pl-2">💰 판돈: ${penaltyAmount.toLocaleString()}원</span>
+                        </div>
                     </div>
                     <div class="flex gap-3 mb-4">
                         <button onclick="placeBet(${match.id}, 'A', '${match.team_a}')" class="${myBet?.pick === 'A'?'bg-blue-600 text-white shadow-inner border-2 border-blue-800':'bg-gray-100 text-gray-700 border-2 border-gray-300 hover:bg-blue-50'} w-1/2 py-4 rounded-xl font-black transition text-lg">${match.team_a} 승</button>
@@ -648,21 +620,25 @@
             const allSettled = matches.filter(m => m.status === 'finished' || m.status === 'paid');
             const onlyFinished = matches.filter(m => m.status === 'finished'); 
             
-            let misses = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
+            let missCount = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
+            let missAmount = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             let pendingDetails = { '박형철': [], '와대': [], '손호민': [], '최석훈': [] }; 
-            let totalSettledCount = 0; 
+            let totalSettledAmount = 0; 
             
             allSettled.forEach(match => {
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const adjA = Number(match.score_a) + Number(match.handicap);
                 let winner = (adjA > Number(match.score_b)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
+                const penalty = match.penalty_amount || 1500;
+
                 if(winner !== 'D') {
                     players.forEach(p => {
                         const bet = matchBets.find(b => b.player_name === p);
                         if (!bet || bet.pick !== winner) {
-                            misses[p]++; 
+                            missCount[p]++; 
+                            missAmount[p] += penalty;
                             const isPaid = (match.status === 'paid') || (bet && bet.is_paid);
-                            if (isPaid) { totalSettledCount++; }
+                            if (isPaid) { totalSettledAmount += penalty; }
                         }
                     });
                 }
@@ -672,38 +648,44 @@
                 const matchBets = bets.filter(b => b.match_id === match.id);
                 const adjA = Number(match.score_a) + Number(match.handicap);
                 let winner = (adjA > Number(match.score_b)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
+                const penalty = match.penalty_amount || 1500;
+
                 if(winner !== 'D') {
                     players.forEach(p => {
                         const bet = matchBets.find(b => b.player_name === p);
-                        if ((!bet || bet.pick !== winner) && (!bet || !bet.is_paid)) { pendingDetails[p].push(`${match.team_a} vs ${match.team_b}`); }
+                        if ((!bet || bet.pick !== winner) && (!bet || !bet.is_paid)) { 
+                            pendingDetails[p].push({ text: `${match.team_a} vs ${match.team_b}`, amount: penalty }); 
+                        }
                     });
                 }
             });
 
-            document.getElementById('total-fund').innerText = (totalSettledCount * 1500).toLocaleString() + '원';
-            const sorted = Object.entries(misses).sort((a,b) => b[1]-a[1]);
-            const maxMisses = sorted[0][1]; 
+            document.getElementById('total-fund').innerText = totalSettledAmount.toLocaleString() + '원';
+            
+            // 금액 순으로 정렬
+            const sorted = Object.entries(missAmount).sort((a,b) => b[1]-a[1]);
+            const maxAmount = sorted[0][1]; 
 
-            document.getElementById('leaderboard').innerHTML = sorted.map(([n, c]) => {
-                const isFirstPlace = (c > 0 && c === maxMisses);
+            document.getElementById('leaderboard').innerHTML = sorted.map(([n, amt]) => {
+                const isFirstPlace = (amt > 0 && amt === maxAmount);
                 const leftIcon = isFirstPlace ? '👑' : '👤';
                 const rightIcon = isFirstPlace ? ' 👑' : '';
                 return `<li class="flex justify-between items-center bg-gray-700 p-3 rounded-lg border-b border-gray-600">
                     <span class="text-base">${leftIcon} <span class="font-bold tracking-wide">${n}</span><span class="text-yellow-400">${rightIcon}</span></span>
-                    <span class="${c>0?'text-red-400':'text-green-400'} font-black text-base">${(c * 1500).toLocaleString()}원 <span class="text-xs font-normal">(${c}회)</span></span>
+                    <span class="${amt>0?'text-red-400':'text-green-400'} font-black text-base">${amt.toLocaleString()}원 <span class="text-xs font-normal text-gray-400">(${missCount[n]}회)</span></span>
                 </li>`;
             }).join('');
 
             const pendingHtml = Object.entries(pendingDetails)
                 .filter(([n, matchesArr]) => matchesArr.length > 0)
                 .map(([n, matchesArr]) => {
-                    const amount = matchesArr.length * 1500;
-                    const matchText = matchesArr.join(', ');
+                    const totalAmt = matchesArr.reduce((sum, item) => sum + item.amount, 0);
+                    const matchText = matchesArr.map(item => `${item.text}(${(item.amount/1000)}k)`).join(', ');
                     return `<li class="flex flex-col bg-red-900 bg-opacity-40 p-3 rounded-lg border border-red-800 shadow-sm mb-2">
                         <div class="flex justify-between items-center mb-1.5">
                             <span class="font-bold text-red-300 tracking-wide text-base">💸 ${n}</span>
                             <div class="flex items-center gap-3">
-                                <span class="text-red-400 font-black text-base">${amount.toLocaleString()}원</span>
+                                <span class="text-red-400 font-black text-base">${totalAmt.toLocaleString()}원</span>
                                 <button onclick="handleAdminAction('pay_person', '${n}')" class="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1.5 rounded shadow-sm transition">개인별 수금완료</button>
                             </div>
                         </div>
@@ -739,9 +721,10 @@
             const tA = document.getElementById('new-teamA').value;
             const tB = document.getElementById('new-teamB').value;
             const h = parseFloat(document.getElementById('new-handi').value);
+            const p = parseInt(document.getElementById('new-penalty').value) || 1500;
             if(!tA || !tB || isNaN(h)) return alert("국가명과 핸디캡을 정확히 입력하세요.");
-            await client.from('matches').insert({ team_a: tA, team_b: tB, handicap: h, status: 'open', created_at: new Date() });
-            logAction('수동등록', `${tA} vs ${tB} (핸디:${h}) 등록`);
+            await client.from('matches').insert({ team_a: tA, team_b: tB, handicap: h, penalty_amount: p, status: 'open', created_at: new Date() });
+            logAction('수동등록', `${tA} vs ${tB} (핸디:${h}, 판돈:${p}) 등록`);
             loadData();
         }
 
@@ -761,9 +744,10 @@
             if(nA === null) return;
             const nB = prompt("팀B 수정:", match.team_b);
             const nH = prompt("핸디캡 수정:", match.handicap);
+            const nP = prompt("판돈 수정 (숫자만 입력, 예: 3000):", match.penalty_amount || 1500);
             
-            if(nA && nB && nH) {
-                client.from('matches').update({ team_a: nA, team_b: nB, handicap: parseFloat(nH) }).eq('id', id).then(() => {
+            if(nA && nB && nH && nP) {
+                client.from('matches').update({ team_a: nA, team_b: nB, handicap: parseFloat(nH), penalty_amount: parseInt(nP) }).eq('id', id).then(() => {
                     logAction('경기수정', `경기ID:${id} 수정됨`);
                     loadData();
                 });
