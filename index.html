@@ -10,6 +10,7 @@
     <style>
         .gold-gradient { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%); }
         .gold-text { background: linear-gradient(to right, #b45309, #d97706); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .museum-card { background: linear-gradient(to bottom inline, #ffffff, #fefafd); }
     </style>
 </head>
 <body class="bg-slate-100 p-4 md:p-8 font-sans relative">
@@ -71,7 +72,7 @@
             </div>
 
             <div class="pt-3 border-t border-slate-800 mt-2">
-                <h4 class="text-sm font-bold text-red-400 mb-3 flex items-center gap-1">🚨 현시점 미납금 즉시 수금판</h4>
+                <h4 class="text-sm font-bold text-rose-400 mb-3 flex items-center gap-1">🚨 현시점 미납금 즉시 수금판</h4>
                 <ul id="pending-payments" class="space-y-2 text-sm text-slate-300"></ul>
             </div>
         </div>
@@ -172,7 +173,7 @@
         let trendChart = null; 
         let allDbMatches = [];
         let allDbBets = [];
-        let currentSelectedTab = '박형철'; 
+        let currentSelectedTab = '박형철'; // 개인 박물관 타겟 멤버 변수
 
         const travelMilestones = [
             { amt: 50000, desc: "🍗 야식 치맥 전원 파티 해금" },
@@ -181,86 +182,149 @@
             { amt: 400000, desc: "💎 풀빌라 독채 + 프리미엄 오마카세 예약" }
         ];
 
-        const teamDictionary = {
-            "Mexico": "멕시코", "Czech Republic": "체코", "Czechia": "체코", "South Africa": "남아프리카공화국", "South Korea": "대한민국", "Korea Republic": "대한민국",
-            "Canada": "캐나다", "Bosnia and Herzegovina": "보스니아 헤르체고비나", "Bosnia": "보스니아 헤르체고비나", "Bosnia-Herzegovina": "보스니아 헤르체고비나", "Qatar": "카타르", "Switzerland": "스위스",
-            "Brazil": "브라질", "Haiti": "아이티", "Morocco": "모로코", "Scotland": "스코틀랜드",
-            "United States": "미국", "USA": "미국", "Australia": "호주", "Paraguay": "파라과이", "Turkey": "튀르키예", "Türkiye": "튀르키예",
-            "Curaçao": "퀴라소", "Curacao": "퀴라소", "Ecuador": "에콰도르", "Germany": "독일", "Ivory Coast": "코트디부아르", "Côte d'Ivoire": "코트디부아르",
-            "Netherlands": "네덜란드", "Japan": "일본", "Sweden": "스웨덴", "Tunisia": "튀니지",
-            "Belgium": "벨기에", "Egypt": "이집트", "Iran": "이란", "New Zealand": "뉴질랜드",
-            "Cape Verde": "카보베르데", "Saudi Arabia": "사우디아라비아", "Spain": "스페인", "Uruguay": "우루과이",
-            "France": "프랑스", "Norway": "노르웨이", "Senegal": "세네갈", "Iraq": "이라크",
-            "Algeria": "알제리", "Argentina": "아르헨티나", "Austria": "오스트리아", "Jordan": "요르단",
-            "Colombia": "콜롬비아", "Jamaica": "자메이카", "Portugal": "포르투갈", "Uzbekistan": "우즈베키스탄",
-            "England": "잉글랜드", "Croatia": "크로아티아", "DR Congo": "콩고민주공화국", "Congo DR": "콩고민주공화국", "Democratic Republic of the Congo": "콩고민주공화국", "Panama": "파나마",
-            "Ghana": "가나"
-        };
+        async function fetchIP() { try { const res = await fetch('https://api.ipify.org?format=json'); const data = await res.json(); currentIP = data.ip; } catch(e) {} }
 
-        function toggleMatchHistory(matchId, korTeamA, korTeamB) {
-            const el = document.getElementById(`history-box-${matchId}`);
-            if (!el.classList.contains('hidden')) { el.classList.add('hidden'); return; }
+        async function logAction(actionType, details) {
+            const user = currentUser || '알수없음';
+            try { await client.from('action_logs').insert({ user_name: user, action_type: actionType, details: details, ip_address: currentIP }); if(isAdminLoggedIn) fetchLogs(); } catch(e) {}
+        }
 
-            let historyA = []; let historyB = [];
-            allDbMatches.forEach(match => {
-                if (match.status === 'finished' || match.status === 'paid') {
-                    const hName = match.team_a; const aName = match.team_b;
-                    const hScore = match.score_a; const aScore = match.score_b;
-                    const matchHtml = `
-                        <div class="flex justify-between items-center text-xs bg-white py-2 px-3 rounded-lg border border-gray-200 font-mono shadow-sm animate-fade-in mb-1.5">
-                            <span class="text-gray-800 font-bold truncate flex-1 text-left">${hName}</span>
-                            <span class="font-black text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded border border-yellow-200 text-center mx-2">${hScore} : ${aScore}</span>
-                            <span class="text-gray-800 font-bold truncate flex-1 text-right">${aName}</span>
-                        </div>`;
-                    if (hName === korTeamA || aName === korTeamA) historyA.push(matchHtml);
-                    if (hName === korTeamB || aName === korTeamB) historyB.push(matchHtml);
+        async function fetchLogs() {
+            try {
+                const { data: logs } = await client.from('action_logs').select('*').order('created_at', { ascending: false }).limit(50);
+                document.getElementById('admin-log-list').innerHTML = logs.map(l => {
+                    const dbDate = new Date(l.created_at); dbDate.setHours(dbDate.getHours() - 9); 
+                    return `<div class="border-b border-gray-700 pb-1 mb-1"><span class="text-gray-500">[${dbDate.toLocaleDateString('ko-KR', {month:'short', day:'numeric'})} ${dbDate.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'})}]</span> <span class="text-blue-300 font-bold">${l.user_name}</span>: <span class="text-yellow-300">${l.action_type}</span> <span class="text-gray-400">- ${l.details}</span></div>`;
+                }).join('');
+            } catch(e) {}
+        }
+
+        function setSyncDateToToday() {
+            const now = new Date(); const utc = now.getTime() + (now.getTimezoneOffset() * 60000); const kst = new Date(utc + (9 * 60 * 60 * 1000));
+            document.getElementById('sync-date').value = `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, '0')}-${String(kst.getDate()).padStart(2, '0')}`;
+        }
+
+        async function init() { 
+            await fetchIP(); setSyncDateToToday();
+            if (currentUser) { document.getElementById('popup-user-select').value = currentUser; document.getElementById('display-current-user').innerText = currentUser; }
+            loadData(); 
+        }
+
+        function confirmUserPopup() {
+            const selected = document.getElementById('popup-user-select').value;
+            if (!selected) return alert('이름을 반드시 선택해주세요!');
+            currentUser = selected; localStorage.setItem('worldcupUser', currentUser);
+            document.getElementById('display-current-user').innerText = currentUser;
+            document.getElementById('user-popup').classList.add('hidden');
+            logAction('접속', `${currentUser} 박물관 입장`);
+            loadData();
+        }
+
+        function checkAuth() {
+            if (isAdminLoggedIn) return true;
+            const input = prompt("🔒 방장 비밀번호를 입력하세요:");
+            if (input === ADMIN_PASSWORD) { isAdminLoggedIn = true; return true; }
+            if (input !== null) alert("비밀번호가 오틀렸습니다."); return false;
+        }
+
+        function handleAdminAction(action, ...args) {
+            if(!checkAuth()) return;
+            if(action === 'show_menu') { document.getElementById('admin-menu').classList.remove('hidden'); fetchLogs(); }
+            if(action === 'create') createMatch();
+            if(action === 'finish') finishMatch(args[0]);
+            if(action === 'paid') markAsPaid(args[0]);
+            if(action === 'pay_person') markPersonAsPaid(args[0]); 
+            if(action === 'close') closeBetting(args[0]);
+            if(action === 'sync') syncWorldCup();
+            if(action === 'set_handi') updateHandicap(args[0]);
+            if(action === 'clear_logs') clearLogs();
+            if(action === 'reset') resetAllMatches();
+        }
+
+        function logoutAdmin() { isAdminLoggedIn = false; document.getElementById('admin-menu').classList.add('hidden'); alert('잠금 처리되었습니다.'); }
+        async function clearLogs() { if(!confirm("로그를 비우시겠습니까?")) return; await client.from('action_logs').delete().neq('id', 0); logAction('시스템', '로그 초기화'); fetchLogs(); }
+
+        function togglePaidMatches() {
+            const el = document.getElementById('paid-matches-container'); const icon = document.getElementById('paid-toggle-icon');
+            if(el.classList.contains('hidden')) { el.classList.remove('hidden'); icon.innerText = '🔼'; } else { el.classList.add('hidden'); icon.innerText = '🔽'; }
+        }
+
+        async function performSync(dateVal, showSuccessAlert = true) {
+            const syncPenalty = showSuccessAlert ? (parseInt(document.getElementById('sync-penalty').value) || 24000) : 24000;
+            try {
+                const targetDate = new Date(dateVal); const prevDate = new Date(targetDate); prevDate.setDate(targetDate.getDate() - 1);
+                const date1 = prevDate.toISOString().split('T')[0].replace(/-/g, ''); const date2 = dateVal.replace(/-/g, '');
+                const [res1, res2] = await Promise.all([
+                    fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date1}`),
+                    fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${date2}`)
+                ]);
+                const data1 = await res1.json(); const data2 = await res2.json();
+                let allEvents = []; if (data1.events) allEvents = allEvents.concat(data1.events); if (data2.events) allEvents = allEvents.concat(data2.events);
+                const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
+                const { data: dbMatches } = await client.from('matches').select('*');
+                let newCount = 0, updateCount = 0;
+
+                for (const event of uniqueEvents) {
+                    const matchDateUtc = new Date(event.date); const kstTime = matchDateUtc.getTime() + (9 * 60 * 60 * 1000);
+                    if (new Date(kstTime).toISOString().split('T')[0] !== dateVal) continue;
+
+                    const comp = event.competitions[0];
+                    const home = comp.competitors.find(c => c.homeAway === 'home'); const away = comp.competitors.find(c => c.homeAway === 'away');
+                    const teamA = teamDictionary[home.team.name] || home.team.name; const teamB = teamDictionary[away.team.name] || away.team.name;
+                    const scoreA = parseInt(home.score) || 0; const scoreB = parseInt(away.score) || 0;
+                    const isFinished = event.status.type.state === 'post' || event.status.type.completed;
+                    
+                    const existingMatch = dbMatches.find(m => m.team_a === teamA && m.team_b === teamB);
+                    if (existingMatch) {
+                        if (isFinished && existingMatch.status !== 'finished' && existingMatch.status !== 'paid') {
+                            await client.from('matches').update({ score_a: scoreA, score_b: scoreB, status: 'finished' }).eq('id', existingMatch.id);
+                            updateCount++;
+                        }
+                    } else {
+                        await client.from('matches').insert({ team_a: teamA, team_b: teamB, handicap: 0, penalty_amount: syncPenalty, status: isFinished ? 'finished' : 'open', score_a: scoreA, score_b: scoreB, created_at: event.date });
+                        newCount++;
+                    }
                 }
-            });
+                if (showSuccessAlert) { alert(`🌐 결승 전석 연동 완료!`); }
+                loadData(); return true;
+            } catch(e) { return false; }
+        }
 
-            historyA.reverse(); historyB.reverse();
-            historyA = historyA.slice(0, 4); historyB = historyB.slice(0, 4);
+        async function syncWorldCup() { await performSync(document.getElementById('sync-date').value, true); }
+        async function publicSyncToday() {
+            if (isPublicSyncing) return alert("⏳ 쿨타임 중입니다."); isPublicSyncing = true;
+            const btn = document.getElementById('public-sync-btn'); btn.innerHTML = "⏳ 연동 중...";
+            const now = new Date(); const utc = now.getTime() + (now.getTimezoneOffset() * 60000); const kst = new Date(utc + (9 * 60 * 60 * 1000));
+            const dateVal = `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, '0')}-${String(kst.getDate()).padStart(2, '0')}`;
+            await performSync(dateVal, false); btn.innerHTML = "✅ 연동 완료";
+            setTimeout(() => { isPublicSyncing = false; btn.innerHTML = "🔄 오늘 경기 새로고침"; btn.classList.remove("opacity-50"); }, 10000);
+        }
 
-            const htmlA = historyA.length > 0 ? historyA.join('') : '<p class="text-xs text-gray-400 text-center py-2">이전 경기 데이터 없음</p>';
-            const htmlB = historyB.length > 0 ? historyB.join('') : '<p class="text-xs text-gray-400 text-center py-2">이전 경기 데이터 없음</p>';
-
-            el.innerHTML = `
-                <div class="flex flex-col gap-4">
-                    <div class="bg-gray-50 rounded-xl p-3 shadow-inner border border-gray-200">
-                        <p class="text-sm font-black text-gray-800 mb-3 border-b border-gray-300 pb-2 text-center">📈 ${korTeamA} 전적</p>
-                        <div class="flex flex-col">${htmlA}</div>
-                    </div>
-                    <div class="bg-gray-50 rounded-xl p-3 shadow-inner border border-gray-200">
-                        <p class="text-sm font-black text-gray-800 mb-3 border-b border-gray-300 pb-2 text-center">📈 ${korTeamB} 전적</p>
-                        <div class="flex flex-col">${htmlB}</div>
-                    </div>
-                </div>
-            `;
-            el.classList.remove('hidden');
+        async function updateHandicap(id) {
+            await client.from('matches').update({ handicap: parseFloat(document.getElementById(`h-${id}`).value) }).eq('id', id);
+            loadData();
         }
 
         async function loadData() {
             try {
                 const { data: matches } = await client.from('matches').select('*').order('created_at', { ascending: true });
-                const { data: bets } = await client.from('bets').select('*').order('id', { ascending: true });
-                // ✅ 방문 데이터 수집을 위한 '접속' 로그 로드
-                const { data: visitLogs } = await client.from('action_logs').select('user_name').eq('action_type', '접속');
+                const { data: bets } = await client.from('bets').select('*').order('id', { ascending: true }); // ✅ 베팅 순서 추적을 위해 id 오름차순 정렬 추출
                 
                 allDbMatches = matches || []; 
                 allDbBets = bets || [];
-                const visitCounts = visitLogs || [];
 
                 const statusOrder = { 'open': 1, 'closed': 2, 'finished': 3, 'paid': 4 };
                 matches.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
-                calculateLeaderboardAndMuseum(visitCounts); // 방문 이력 매개변수 전달
+                calculateLeaderboardAndMuseum();
                 renderTrendChart(matches || [], bets || []); 
                 renderMatches(matches || [], bets || []);
                 renderAdminList(matches || []);
             } catch (err) { console.error(err); }
         }
 
-        // ✅ 메인 결산 및 통계 처리 엔진 개편
-        function calculateLeaderboardAndMuseum(visitLogs) {
+        // ✅ 🏛️ 아카파 박물관 핵심 엔진 (종합 통계 + 개인 데이터 산출 장치)
+        function calculateLeaderboardAndMuseum() {
             const allSettled = allDbMatches.filter(m => m.status === 'finished' || m.status === 'paid');
             const onlyFinished = allDbMatches.filter(m => m.status === 'finished');
 
@@ -268,37 +332,35 @@
             let missAmount = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             let hitCount = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             
+            // 특수 지표용 구조 설계
             let loneWins = { '박형철': [], '와대': [], '손호민': [], '최석훈': [] };
             let countryPicks = { '박형철': {}, '와대': {}, '손호민': {}, '최석훈': {} };
             let speedFastest = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             let speedLatest = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
-            let visitStats = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             
-            let allWrongMatches = []; 
+            let allWrongMatches = []; // 전원 폭망 경기 리스트
             let totalSettledVolume = 0; 
 
+            // 연속 오답 추적용 임시 변수
             let currentStreak = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             let maxStreak = { '박형철': 0, '와대': 0, '손호민': 0, '최석훈': 0 };
             let maxStreakMatch = { '박형철': '', '와대': '', '손호민': '', '최석훈': '' };
 
+            // 개인 전시용 리스트업 박스
             let personalMatchLogs = { '박형철': [], '와대': [], '손호민': [], '최석훈': [] };
 
-            // 방문 횟수 통계 연산
-            visitLogs.forEach(log => {
-                if (visitStats[log.user_name] !== undefined) {
-                    visitStats[log.user_name]++;
-                }
-            });
-
+            // 1. 메인 타임라인 아카이브 연산
             allDbMatches.forEach(match => {
                 const matchBets = allDbBets.filter(b => b.match_id === match.id);
                 const matchName = `${match.team_a} vs ${match.team_b}`;
                 
+                // 베팅 속도 추적 (4명이 다 참여하지 않았어도 최초/최종 가려냄)
                 if (matchBets.length > 0) {
                     speedFastest[matchBets[0].player_name]++;
                     speedLatest[matchBets[matchBets.length - 1].player_name]++;
                 }
 
+                // 최애 국가 수집 장치
                 matchBets.forEach(bet => {
                     const pickedTeam = bet.pick === 'A' ? match.team_a : match.team_b;
                     countryPicks[bet.player_name][pickedTeam] = (countryPicks[bet.player_name][pickedTeam] || 0) + 1;
@@ -311,6 +373,7 @@
 
                     if (winner !== 'D') {
                         let correctGuys = [];
+                        let wrongGuys = [];
 
                         players.forEach(p => {
                             const bet = matchBets.find(b => b.player_name === p);
@@ -319,9 +382,10 @@
                             if (isCorrect) {
                                 correctGuys.push(p);
                                 hitCount[p]++;
-                                currentStreak[p] = 0;
+                                currentStreak[p] = 0; // 연속 오답 리셋
                                 personalMatchLogs[p].push({ text: matchName, isHit: true, penalty: 0 });
                             } else {
+                                wrongGuys.push(p);
                                 missCount[p]++;
                                 missAmount[p] += penalty;
                                 currentStreak[p]++;
@@ -338,13 +402,23 @@
                             }
                         });
 
-                        if (correctGuys.length === 1) { loneWins[correctGuys[0]].push(matchName); }
-                        if (correctGuys.length === 0) { allWrongMatches.push(`${matchName}(-${penalty/1000}k)`); }
+                        // 고독한 승부사 판단 (나홀로 정답)
+                        if (correctGuys.length === 1) {
+                            loneWins[correctGuys[0]].push(matchName);
+                        }
+
+                        // 전원 폭망 판단
+                        if (correctGuys.length === 0) {
+                            allWrongMatches.push(`${matchName} (${penalty.toLocaleString()}원)`);
+                        }
                     }
                 }
             });
 
-            // 게이지바 활성화
+            // 총 누적 금액 화면 갱신
+            document.getElementById('total-fund').innerText = totalSettledVolume.toLocaleString() + '원';
+
+            // 2. 여행 가이드 보상 체크 바 활성화
             let progressPercent = Math.min((totalSettledVolume / 250000) * 100, 100);
             document.getElementById('goal-progress-bar').style.width = `${progressPercent}%`;
 
@@ -355,15 +429,17 @@
                 </div>`;
             }).join('');
 
-            // 리더보드 출력
+            // 3. 메인 누적 벌금 장부 + 지분율 명시 렌더링
             const sortedByAmount = Object.entries(missAmount).sort((a,b) => b[1]-a[1]);
             const maxAmt = sortedByAmount[0][1];
 
             document.getElementById('leaderboard').innerHTML = sortedByAmount.map(([n, amt]) => {
                 const isFirst = (amt > 0 && amt === maxAmt);
+                const crown = isFirst ? '👑' : '👤';
                 const share = totalSettledVolume > 0 ? ((amt / sortedByAmount.reduce((s,i)=>s+i[1],0)) * 100).toFixed(1) : 0;
+
                 return `<li class="flex justify-between items-center bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-sm">
-                    <span class="text-sm text-slate-200 font-bold">${isFirst ? '👑' : '👤'} ${isFirst ? `👑 ${n} 👑` : n}</span>
+                    <span class="text-sm text-slate-200 font-bold">${crown} ${isFirst ? `👑 ${n} 👑` : n}</span>
                     <span class="font-black text-right">
                         <span class="${amt>0?'text-rose-400':'text-green-400'} text-base">${amt.toLocaleString()}원</span>
                         <span class="text-[11px] font-normal text-slate-400 block">지분율 ${share}% (${missCount[n]}회 오답)</span>
@@ -371,17 +447,19 @@
                 </li>`;
             }).join('');
 
-            // 미납금 패널 렌더
+            // 4. 미납 정산 패널 고도화
             let pendingPaymentsHtml = '';
             players.forEach(p => {
                 let pList = [];
                 onlyFinished.forEach(match => {
                     const matchBets = allDbBets.filter(b => b.match_id === match.id);
                     const adjA = Number(match.score_a) + Number(match.handicap);
-                    let winner = (adjA > Number(match.score_a)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
+                    let winner = (adjA > Number(match.score_b)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
                     if (winner !== 'D') {
                         const bet = matchBets.find(b => b.player_name === p);
-                        if ((!bet || bet.pick !== winner) && (!bet || !bet.is_paid)) { pList.push(`${match.team_a}vs${match.team_b}`); }
+                        if ((!bet || bet.pick !== winner) && (!bet || !bet.is_paid)) {
+                            pList.push(`${match.team_a}vs${match.team_b}(${(match.penalty_amount/1000)}k)`);
+                        }
                     }
                 });
 
@@ -391,68 +469,69 @@
                             <div class="flex justify-between items-center mb-1">
                                 <span class="font-bold text-rose-400">💸 ${p}</span>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-white font-black">${(pList.length * 1500).toLocaleString()}원</span>
-                                    <button onclick="handleAdminAction('pay_person', '${p}')" class="bg-green-600 text-white text-[10px] font-black px-2.5 py-1.5 rounded shadow">방장 수금완료</button>
+                                    <span class="text-white font-black">${(pList.length * allDbMatches.find(m=>m.status==='finished')?.penalty_amount || 1500 * pList.length).toLocaleString()}원</span>
+                                    <button onclick="handleAdminAction('pay_person', '${p}')" class="bg-green-600 text-white text-[10px] font-black px-2.5 py-1.5 rounded hover:bg-green-500 transition shadow">방장 수금완료</button>
                                 </div>
                             </div>
+                            <div class="text-[11px] text-slate-400 truncate">(${pList.join(', ')})</div>
                         </li>`;
                 }
             });
-            document.getElementById('pending-payments').innerHTML = pendingPaymentsHtml || '<li class="text-center text-slate-500 py-2 text-xs">수금 대기 내역이 없습니다 👏</li>';
+            document.getElementById('pending-payments').innerHTML = pendingPaymentsHtml || '<li class="text-center text-slate-500 py-2 text-xs">정산이 필요한 잔여 금액이 없습니다 👏</li>';
 
-            // 최고 방문객 추적
-            let mostVisitedGuy = players[0]; let maxVisits = -1;
-            players.forEach(p => { if (visitStats[p] > maxVisits) { maxVisits = visitStats[p]; mostVisitedGuy = p; } });
-
-            // 🏛️ 역사관 종합 지표 출력
+            // 5. 🏛️ 아카파 종합 역사관 패널 조립
             let bestProphetGlobal = players[0]; let maxRateGlobal = -1;
             players.forEach(p => {
                 let total = hitCount[p] + missCount[p];
                 let rate = total > 0 ? (hitCount[p] / total) : 0;
                 if (rate > maxRateGlobal) { maxRateGlobal = rate; bestProphetGlobal = p; }
             });
+
+            // 연속 오답 불명예 가려내기
             let worstStreakGuy = players[0]; let worstStreakCount = -1;
             players.forEach(p => { if(maxStreak[p] > worstStreakCount) { worstStreakCount = maxStreak[p]; worstStreakGuy = p; } });
 
             document.getElementById('global-museum-stats').innerHTML = `
-                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-2">
-                    <span class="font-black text-amber-600">👀 박물관 최다 방문객 (새로고침 만렙)</span>
-                    <p class="mt-1 font-medium text-slate-800">가장 자주 사이트를 드나들며 판돈 추세를 모니터링한 멤버는 <b>${mostVisitedGuy}</b> 님으로, 총 <span class="text-amber-600 font-black">${maxVisits}회</span> 감시망에 포착되었습니다.</p>
-                    <div class="text-[10px] text-slate-400 mt-1 font-mono">(${players.map(p => `${p}: ${visitStats[p]}회`).join(' / ')})</div>
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                    <span class="font-black text-blue-700">🔮 펠레의 예언서 (최고 정답률)</span>
+                    <p class="mt-1 font-medium text-slate-800"><b>${bestProphetGlobal}</b> 님이 총 <span class="text-blue-600 font-bold">${hitCount[bestProphetGlobal]}경기</span>를 적중시키며 승률 <span class="text-blue-600 font-black">${(maxRateGlobal*100).toFixed(1)}%</span>로 역사관 최상단에 기록되었습니다.</p>
                 </div>
-                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-2">
-                    <span class="font-black text-blue-700">🔮 최고의 예언가 (최고 정답률)</span>
-                    <p class="mt-1 font-medium text-slate-800"><b>${bestProphetGlobal}</b> 님이 총 <span class="text-blue-600 font-bold">${hitCount[bestProphetGlobal]}경기</span>를 맞추며 정답률 <span class="text-blue-600 font-black">${(maxRateGlobal*100).toFixed(1)}%</span>를 마크했습니다.</p>
-                </div>
-                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-2">
-                    <span class="font-black text-purple-700">🐺 고독한 승부사 (독식 매치)</span>
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                    <span class="font-black text-purple-700">🐺 영광의 고독한 승부사 (나홀로 적중)</span>
+                    <p class="mt-1 font-medium text-slate-800">모두가 다른 곳을 볼 때 혼자 정답을 꿰뚫어 본 최강의 매치:</p>
                     <ul class="list-disc pl-4 mt-1 text-slate-600 space-y-0.5 font-mono text-[11px]">
                         ${players.map(p => `<li><b>${p}</b>: ${loneWins[p].length > 0 ? loneWins[p].join(', ') : '없음'}</li>`).join('')}
                     </ul>
                 </div>
                 <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-                    <span class="font-black text-red-600">💥 전원 오답 폭망 매치</span>
-                    <p class="mt-1 font-mono text-red-500 font-bold text-[11px] break-all">${allWrongMatches.length > 0 ? allWrongMatches.join(' / ') : '없음 👏'}</p>
+                    <span class="font-black text-red-600">💥 전원 폭망관 (4명 전원 오답 매치)</span>
+                    <p class="mt-1 font-medium text-slate-800">방장님의 설계에 4명 모두가 속아 넘어가 장부를 든든하게 채워준 매치들입니다:</p>
+                    <p class="mt-1 font-mono text-red-500 font-bold">${allWrongMatches.length > 0 ? allWrongMatches.join(' / ') : '기록이 아직 없습니다 👏'}</p>
+                </div>
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-slate-200">
+                    <span class="font-black text-slate-800">😭 눈물의 연속 지갑 오픈 기록</span>
+                    <p class="mt-1 font-medium text-slate-800">역사상 가장 긴 암흑기를 거친 멤버는 <b>${worstStreakGuy}</b> 님으로, <span class="text-red-500 font-bold">${worstStreakCount}연속</span> 오답을 기록했습니다. (기폭제 매치: ${maxStreakMatch[worstStreakGuy]})</p>
                 </div>
             `;
 
-            // 👤 개인 전시관 렌더링
+            // 6. 👤 개인 박물관 전시관 활성화 (탭 생성 및 랜더)
             document.getElementById('member-tabs').innerHTML = players.map(p => `
-                <button onclick="switchStatTab('${p}')" class="flex-grow py-2 text-center text-xs font-black rounded-md transition-all ${currentSelectedTab === p ? 'bg-white text-amber-700 shadow-sm' : 'text-amber-900 opacity-60'}">
+                <button onclick="switchStatTab('${p}')" class="flex-grow py-2 text-center text-xs font-black rounded-md transition-all ${currentSelectedTab === p ? 'bg-white text-amber-700 shadow-sm' : 'text-amber-900 opacity-60 hover:opacity-100'}">
                     ${p}
                 </button>
             `).join('');
 
             const tUser = currentSelectedTab;
+            // 가장 많이 베팅한 최애국가 선별
             let favCountry = "없음"; let favCount = 0;
             Object.entries(countryPicks[tUser]).forEach(([c, cnt]) => { if(cnt > favCount) { favCount = cnt; favCountry = c; } });
 
             let personalTotal = hitCount[tUser] + missCount[tUser];
             let personalRate = personalTotal > 0 ? ((hitCount[tUser]/personalTotal)*100).toFixed(1) : 0;
 
-            // ✅ 맞춘 경기 / 틀린 경기 상세 바 렌더링 (줄바꿈 현상 해소 및 정렬 패치)
-            let hitListHtml = personalMatchLogs[tUser].filter(l=>l.isHit).map(l=>`<div class="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg border border-blue-100 font-mono text-[11px] font-bold shadow-sm">✅ ${l.text}</div>`).join('') || '<p class="text-gray-400 py-1">적중 전적이 없습니다.</p>';
-            let missListHtml = personalMatchLogs[tUser].filter(l=>!l.isHit).map(l=>`<div class="bg-rose-50 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-100 font-mono text-[11px] font-bold shadow-sm">❌ ${l.text} <span class="text-[10px] text-rose-400 font-normal">(-${l.penalty/1000}k)</span></div>`).join('') || '<p class="text-gray-400 py-1">벌금 헌납 이력이 없습니다.</p>';
+            // 정답/오답 상세 기록 리스트업
+            let hitListHtml = personalMatchLogs[tUser].filter(l=>l.isHit).map(l=>`<span class="bg-blue-50 text-blue-700 px-2 py-1 rounded text-[11px] font-mono border border-blue-100">${l.text}</span>`).join(' ') || '아직 적중 기록이 없습니다.';
+            let missListHtml = personalMatchLogs[tUser].filter(l=>!l.isHit).map(l=>`<span class="bg-rose-50 text-rose-700 px-2 py-1 rounded text-[11px] font-mono border border-rose-100">${l.text}(-${l.penalty/1000}k)</span>`).join(' ') || '틀린 기록이 없습니다 깔끔합니다!';
 
             document.getElementById('personal-museum-content').innerHTML = `
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
@@ -462,28 +541,30 @@
                         <span class="text-[10px] text-slate-400 block">(${hitCount[tUser]}승 / ${missCount[tUser]}패)</span>
                     </div>
                     <div class="bg-white p-3 rounded-xl border border-amber-200 text-center shadow-sm">
-                        <span class="text-[10px] text-slate-400 block font-bold">❤️ 최애 국가</span>
+                        <span class="text-[10px] text-slate-400 block font-bold">❤️ 최애 국가 집착도</span>
                         <span class="text-base font-black text-amber-800 truncate block px-1">${favCountry}</span>
-                        <span class="text-[10px] text-slate-400 block">(${favCount}회 선택)</span>
+                        <span class="text-[10px] text-slate-400 block">(총 ${favCount}회 선택)</span>
                     </div>
                     <div class="bg-white p-3 rounded-xl border border-amber-200 text-center shadow-sm">
-                        <span class="text-[10px] text-slate-400 block font-bold">⚡ 광속 베팅 (1등)</span>
+                        <span class="text-[10px] text-slate-400 block font-bold">⚡ 베팅 스피드 (1위)</span>
                         <span class="text-base font-black text-emerald-600">${speedFastest[tUser]}회</span>
+                        <span class="text-[10px] text-slate-400 block">빛보다 빠른 얼리버드</span>
                     </div>
                     <div class="bg-white p-3 rounded-xl border border-amber-200 text-center shadow-sm">
-                        <span class="text-[10px] text-slate-400 block font-bold">🐌 슬로우 베팅 (꼴등)</span>
+                        <span class="text-[10px] text-slate-400 block font-bold">🐌 지각 베팅 (꼴등)</span>
                         <span class="text-base font-black text-rose-500">${speedLatest[tUser]}회</span>
+                        <span class="text-[10px] text-slate-400 block">간보다가 늦게 낸 횟수</span>
                     </div>
                 </div>
 
-                <div class="space-y-4">
-                    <div class="bg-white p-4 rounded-xl border border-amber-200 shadow-inner">
-                        <p class="font-black text-blue-600 mb-2.5 flex items-center gap-1">🟢 적중한 영광의 매치 목록 (${hitCount[tUser]}건)</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${hitListHtml}</div>
+                <div class="space-y-3">
+                    <div class="bg-white p-3 rounded-xl border border-amber-200 shadow-inner">
+                        <p class="font-black text-blue-600 mb-2">🟢 적중 매치 전시 기록 (${hitCount[tUser]}건)</p>
+                        <div class="flex flex-wrap gap-1.5">${hitListHtml}</div>
                     </div>
-                    <div class="bg-white p-4 rounded-xl border border-amber-200 shadow-inner">
-                        <p class="font-black text-red-600 mb-2.5 flex items-center gap-1">🔴 오답 및 벌금 헌납 매치 목록 (${missCount[tUser]}건)</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${missListHtml}</div>
+                    <div class="bg-white p-3 rounded-xl border border-amber-200 shadow-inner">
+                        <p class="font-black text-red-600 mb-2">🔴 벌금 헌납 매치 전시 기록 (${missCount[tUser]}건)</p>
+                        <div class="flex flex-wrap gap-1.5">${missListHtml}</div>
                     </div>
                 </div>
             `;
@@ -491,7 +572,7 @@
 
         function switchStatTab(playerName) {
             currentSelectedTab = playerName;
-            loadData();
+            calculateLeaderboardAndMuseum();
         }
 
         function renderMatches(matches, bets) {
@@ -529,18 +610,14 @@
                     const adjA = sA + h;
                     let winner = (adjA > sB) ? 'A' : (adjA < sB) ? 'B' : 'D';
                     let losers = winner !== 'D' ? players.filter(p => matchBets.find(b => b.player_name === p)?.pick !== winner) : [];
-                    let penaltyText = winner === 'D' ? '무승부' : (losers.length > 0 ? `💸 납부자: ${losers.join(', ')}` : '🎉 전원 정답');
-
                     paidContainer.insertAdjacentHTML('beforeend', `
-                        <div class="bg-white border-2 border-gray-200 rounded-xl p-4 flex justify-between items-center text-sm shadow-sm opacity-70">
-                            <div class="leading-relaxed">
-                                <span class="font-black text-gray-500 bg-gray-100 px-2 py-1 rounded text-[10px]">수금완료</span> 
-                                <span class="font-bold mx-1 text-gray-700">${match.team_a} ${sA} : ${sB} ${match.team_b}</span>
-                                <br><span class="text-red-500 font-bold mt-1 inline-block text-xs">${penaltyText}</span>
+                        <div class="bg-white border border-slate-200 rounded-xl p-3 flex justify-between items-center text-xs shadow-sm opacity-70">
+                            <div>
+                                <span class="font-black text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-[10px]">정산완료</span> 
+                                <span class="font-bold text-slate-700 ml-1">${match.team_a} ${sA}:${sB} ${match.team_b}</span>
+                                <span class="text-slate-400 ml-2">(판돈: ${penaltyAmount.toLocaleString()}원)</span>
                             </div>
-                            <div class="flex gap-1 ml-2">
-                                <button onclick="deleteMatch(${match.id})" class="text-[10px] bg-red-50 text-red-400 border border-red-100 px-2 py-1 rounded hover:bg-red-100 font-bold">🗑️삭제</button>
-                            </div>
+                            <button onclick="deleteMatch(${match.id})" class="text-[10px] text-red-500 hover:underline">🗑️삭제</button>
                         </div>
                     `);
                     return;
@@ -550,12 +627,13 @@
                     const sA=Number(match.score_a), sB=Number(match.score_b), h=Number(match.handicap);
                     const adjA = sA + h;
                     let winner = (adjA > sB) ? 'A' : (adjA < sB) ? 'B' : 'D';
+                    let winnerText = winner === 'A' ? match.team_a : winner === 'B' ? match.team_b : '무승부';
                     let losers = winner !== 'D' ? players.filter(p => matchBets.find(b => b.player_name === p)?.pick !== winner) : [];
 
                     container.insertAdjacentHTML('beforeend', `
                     <div class="border-2 border-red-300 bg-red-50 rounded-2xl p-5 relative shadow-md mb-6">
                         <div class="absolute top-2 right-4 flex gap-2 items-center">
-                            <button onclick="handleAdminAction('paid', ${match.id})" class="text-[10px] font-black bg-green-500 text-white px-2 py-1.5 rounded shadow hover:bg-green-500">💰전체 수금</button>
+                            <button onclick="handleAdminAction('paid', ${match.id})" class="text-[10px] bg-green-600 text-white px-2 py-1 rounded font-bold shadow hover:bg-green-500">💰전체 수금</button>
                             <button onclick="editBetsAdmin(${match.id})" class="text-[10px] bg-purple-100 text-purple-800 border px-2 py-1 rounded font-bold">픽수정</button>
                             <button onclick="deleteMatch(${match.id})" class="text-[10px] text-red-600 px-1 hover:underline">🗑️</button>
                         </div>
@@ -563,40 +641,43 @@
                             <span class="text-xl font-black text-slate-800">${match.team_a}</span> vs <span class="text-xl font-black text-slate-800">${match.team_b}</span>
                         </div>
                         <div class="bg-slate-800 text-white rounded-xl text-xs p-3 text-center mb-2 shadow-inner">
-                            <p class="font-bold">최종 스코어: ${sA} : ${sB}</p>
-                            <p class="text-red-400 font-black mt-1">🚨 미납자: ${losers.length > 0 ? losers.join(', ') : '없음'}</p>
+                            <p class="font-bold">최종 스코어: ${sA} : ${sB} (핸디 결과: ${winnerText})</p>
+                            <p class="text-red-400 font-black mt-1">🚨 낼 사람: ${losers.length > 0 ? losers.join(', ') : '전원 통과'}</p>
                         </div>
                         <div class="text-[11px] text-center bg-white border p-2 rounded">기록: ${betStatusText}</div>
                     </div>`);
                     return;
                 }
 
+                // 베팅 오픈 카드 (결승전 단 한 판)
                 let cardHTML = `
                 <div class="border-4 border-amber-400 bg-white rounded-2xl p-6 relative shadow-2xl mb-8 transform transition hover:-translate-y-0.5">
                     <span class="absolute -top-4 left-4 ${match.status === 'closed' ? 'bg-gray-600' : 'gold-gradient'} text-white px-4 py-1 rounded-full text-xs font-black shadow-md">
                         ${match.status === 'closed' ? '🔒 베팅 마감됨' : '🏆 GRAND FINAL - 마지막 결전'}
                     </span>
                     <div class="absolute top-2 right-4 flex gap-1 items-center">
-                        <button onclick="editBetsAdmin(${match.id})" class="text-[10px] bg-purple-100 text-purple-800 font-bold border border-purple-300 px-2 py-1.5 rounded hover:bg-purple-200">✏️강제 픽수정</button>
-                        <button onclick="promptEditMatch(${match.id})" class="text-[10px] bg-gray-100 text-gray-500 border border-gray-300 px-2 py-1.5 rounded hover:bg-gray-200">✏️경기수정</button>
-                        <button onclick="deleteMatch(${match.id})" class="text-[10px] bg-red-50 text-red-500 border border-red-200 px-2 py-1.5 rounded hover:bg-red-200">🗑️삭제</button>
+                        <button onclick="editBetsAdmin(${match.id})" class="text-[10px] bg-purple-100 text-purple-800 font-bold border px-2 py-1 rounded">✏️강제 픽수정</button>
+                        <button onclick="promptEditMatch(${match.id})" class="text-[10px] bg-gray-100 text-gray-500 border px-2 py-1 rounded">경기수정</button>
+                        <button onclick="deleteMatch(${match.id})" class="text-[10px] bg-red-50 text-red-500 border px-2 py-1 rounded">🗑️삭제</button>
                     </div>
                     <div class="text-center mb-5 mt-5">
                         <span class="text-3xl font-black gold-text">${match.team_a}</span> <span class="mx-3 text-slate-300 font-bold text-xl">VS</span> <span class="text-3xl font-black gold-text">${match.team_b}</span>
-                        <div class="mt-4 text-sm font-bold bg-amber-50 inline-block px-4 py-1.5 rounded-full border border-amber-200 shadow-sm">
+                        <div class="mt-4 text-sm font-bold bg-amber-50 inline-block px-4 py-1.5 rounded-full border border-amber-200">
                             <span class="text-blue-600 mr-3">핸디캡(A): ${match.handicap}</span>
-                            <span class="text-red-600 border-l border-amber-300 pl-3">💎 한 판의 벌금: ${penaltyAmount.toLocaleString()}원</span>
+                            <span class="text-rose-600 border-l border-amber-300 pl-3">💎 한 판의 성의: ${penaltyAmount.toLocaleString()}원</span>
                         </div>
                     </div>
                     <div class="flex gap-4 mb-4">
-                        <button onclick="placeBet(${match.id}, 'A', '${match.team_a}')" class="${myBet?.pick === 'A'?'gold-gradient text-white shadow-inner border-2 border-amber-600':'bg-slate-50 text-slate-700 border-2 border-slate-200 hover:bg-amber-50'} w-1/2 py-4.5 rounded-xl font-black transition text-xl shadow-md">${match.team_a} 선택</button>
-                        <button onclick="placeBet(${match.id}, 'B', '${match.team_b}')" class="${myBet?.pick === 'B'?'gold-gradient text-white shadow-inner border-2 border-amber-600':'bg-slate-50 text-slate-700 border-2 border-slate-200 hover:bg-amber-50'} w-1/2 py-4.5 rounded-xl font-black transition text-xl shadow-md">${match.team_b} 선택</button>
+                        <button onclick="placeBet(${match.id}, 'A', '${match.team_a}')" class="${myBet?.pick === 'A'?'gold-gradient text-white shadow-inner border-2 border-amber-600':'bg-slate-50 text-slate-700 border-2 border-slate-200 hover:bg-amber-50'} w-1/2 py-4.5 rounded-xl font-black transition text-lg shadow-md">${match.team_a} 선택</button>
+                        <button onclick="placeBet(${match.id}, 'B', '${match.team_b}')" class="${myBet?.pick === 'B'?'gold-gradient text-white shadow-inner border-2 border-amber-600':'bg-slate-50 text-slate-700 border-2 border-slate-200 hover:bg-amber-50'} w-1/2 py-4.5 rounded-xl font-black transition text-lg shadow-md">${match.team_b} 선택</button>
                     </div>
+                    
                     <div class="mt-4 mb-2">
-                        <button onclick="toggleMatchHistory(${match.id}, '${match.team_a}', '${match.team_b}')" class="w-full bg-slate-900 text-amber-400 font-bold py-3 rounded-xl text-xs shadow hover:bg-black transition border border-amber-500">📊 양 팀의 최근 경기 기록 보기</button>
+                        <button onclick="toggleMatchHistory(${match.id}, '${match.team_a}', '${match.team_b}')" class="w-full bg-slate-900 text-amber-400 font-bold py-3 rounded-xl text-xs shadow hover:bg-black transition border border-amber-500">📊 양 팀의 뼈아픈 역사 돌아보기 (이전 스코어 전력판)</button>
                         <div id="history-box-${match.id}" class="hidden mt-3 p-3 bg-white border border-slate-200 rounded-xl shadow-inner"></div>
                     </div>
-                    <div class="text-xs text-center mt-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-bold text-slate-600 tracking-wide shadow-inner">
+
+                    <div class="text-xs text-center mt-3 p-2.5 bg-slate-50 rounded-lg border border-slate-200 font-bold text-slate-600 tracking-wide">
                         실시간 마감 현황: <span class="text-slate-500 block font-normal mt-1">${betStatusText}</span>
                     </div>
                 </div>`;
@@ -644,7 +725,7 @@
             const { data: m } = await client.from('matches').select('status').eq('id', matchId).single();
             if(m.status !== 'open') return alert('베팅이 마감되었습니다!');
             const { data: existingBet } = await client.from('bets').select('*').eq('match_id', matchId).eq('player_name', currentUser);
-            if (existingBet && existingBet.length > 0) return alert('⚠️ 낙장불입! 이미 선택이 완료되었습니다.');
+            if (existingBet && existingBet.length > 0) return alert('⚠️ 한 번 선택한 베팅은 절대 변경 불가(낙장불입)!');
             await client.from('bets').insert({ match_id: matchId, player_name: currentUser, pick: pick });
             logAction('베팅', `결승전 [${teamName}] 픽 완료`);
             loadData();
@@ -666,7 +747,7 @@
             loadData();
         }
 
-        async function resetAllMatches() { if(!confirm("초기화할까요?")) return; await client.from('bets').delete().neq('id', 0); await client.from('matches').delete().neq('id', 0); loadData(); }
+        async function resetAllMatches() { if(!confirm("완전 초기화하시겠습니까?")) return; await client.from('bets').delete().neq('id', 0); await client.from('matches').delete().neq('id', 0); loadData(); }
 
         function promptEditMatch(id) {
             if(!checkAuth()) return; const match = allDbMatches.find(m => m.id === id); if (!match) return;
@@ -685,24 +766,6 @@
         }
         
         async function deleteMatch(id) { if(!checkAuth() || !confirm("삭제할까요?")) return; await client.from('bets').delete().eq('match_id', id); await client.from('matches').delete().eq('id', id); loadData(); }
-        async function markPersonAsPaid(playerName) {
-            try {
-                const { data: mData } = await client.from('matches').select('*').eq('status', 'finished');
-                const { data: bData } = await client.from('bets').select('*').eq('player_name', playerName);
-                let updateIds = []; let insertBets = [];
-                mData.forEach(match => {
-                    const adjA = Number(match.score_a) + Number(match.handicap); let winner = (adjA > Number(match.score_b)) ? 'A' : (adjA < Number(match.score_b)) ? 'B' : 'D';
-                    if(winner !== 'D') {
-                        const bet = bData.find(b => b.match_id === match.id);
-                        if (!bet) { insertBets.push({ match_id: match.id, player_name: playerName, pick: 'X', is_paid: true }); } 
-                        else if (bet.pick !== winner && !bet.is_paid) { updateIds.push(bet.id); }
-                    }
-                });
-                if (updateIds.length > 0) { await client.from('bets').update({ is_paid: true }).in('id', updateIds); }
-                if (insertBets.length > 0) { await client.from('bets').insert(insertBets); }
-                logAction('개별수금', `${playerName} 수금 완료`); loadData();
-            } catch(e) {}
-        }
 
         window.onload = init;
     </script>
